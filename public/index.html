@@ -1,67 +1,870 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TROOLLgel — Search it wrong.</title>
-<style>
-*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Arial,Helvetica,sans-serif;color:#202124;background:#fff}
-body{display:flex;justify-content:center}.app{width:min(1120px,100%);min-height:100vh;padding:26px 24px 36px;display:flex;flex-direction:column}
-header{display:flex;justify-content:space-between;align-items:center}.logo{font-size:23px;font-weight:700;letter-spacing:-1.5px}.badge{font-size:11px;color:#9aa0a6}
-.logo span:nth-child(1),.mini-logo span:nth-child(1),.mark span:nth-child(1){color:#4285f4}.logo span:nth-child(2),.mini-logo span:nth-child(2),.mark span:nth-child(2){color:#ea4335}.logo span:nth-child(3),.mini-logo span:nth-child(3),.mark span:nth-child(3){color:#fbbc05}.logo span:nth-child(4),.mini-logo span:nth-child(4),.mark span:nth-child(4){color:#4285f4}.logo span:nth-child(5),.mini-logo span:nth-child(5),.mark span:nth-child(5){color:#34a853}.logo span:nth-child(6),.mini-logo span:nth-child(6),.mark span:nth-child(6){color:#ea4335}
-main{flex:1}.home{min-height:72vh;display:flex;align-items:center;justify-content:center;text-align:center}.hero{width:min(760px,100%);margin-top:-7vh}.mark{font-size:clamp(60px,9vw,92px);font-weight:700;letter-spacing:-6px;line-height:.9;margin-bottom:25px}.tagline{font-size:18px;color:#5f6368;margin-bottom:34px}
-.search{display:flex;align-items:center;width:100%;height:52px;background:#fff;border:1px solid #dfe1e5;border-radius:28px;box-shadow:0 1px 6px rgba(32,33,36,.18);overflow:hidden}.search input{flex:1;border:0;outline:0;font-size:17px;padding:0 20px}.search button{height:100%;width:70px;border:0;background:#fff;color:#4285f4;font-size:24px;cursor:pointer}.examples{font-size:13px;color:#9aa0a6;margin-top:36px}.chips{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:11px}.chip{background:#fff;border:1px solid #dadce0;border-radius:18px;padding:7px 11px;color:#5f6368;font-size:12px;cursor:pointer}
-.results{display:none}.topbar{display:flex;align-items:center;gap:22px;padding:8px 0 16px;border-bottom:1px solid #f1f3f4}.mini-logo{background:none;border:0;padding:0;font-size:21px;font-weight:700;letter-spacing:-1.5px;cursor:pointer}.result-search{width:min(650px,65vw);height:46px;display:flex;border:1px solid #dfe1e5;border-radius:24px;box-shadow:0 1px 6px rgba(32,33,36,.18);overflow:hidden}.result-search input{flex:1;border:0;outline:0;padding:0 18px;font-size:16px}.result-search button{width:58px;border:0;background:#fff;color:#4285f4;font-size:25px;cursor:pointer}.top-beta{margin-left:auto;color:#9aa0a6;font-size:11px}.serp{width:min(760px,100%);margin-left:94px}.tabs{display:flex;gap:24px;height:48px;align-items:end;color:#5f6368;font-size:13px}.tabs .active{color:#1a73e8;border-bottom:3px solid #1a73e8;padding-bottom:12px}.tabs span:not(.active){padding-bottom:12px}.count{font-size:12px;color:#70757a;padding:14px 0 6px}.search-note{font-size:11px;color:#9aa0a6;padding-bottom:20px}
-.result{margin-bottom:30px;max-width:680px}.url{font-size:13px;color:#202124;margin-bottom:5px}.title{font-size:20px;color:#1a0dab;line-height:1.3;margin-bottom:4px;cursor:pointer}.title:hover{text-decoration:underline}.snippet{font-size:14px;line-height:1.55;color:#4d5156}.troll{position:relative}.troll:before{content:"TROOLLgel";position:absolute;left:-18px;top:2px;transform:translateX(-100%);font-size:8px;color:#9aa0a6;letter-spacing:.05em}.loading{padding:25px 0;color:#70757a;font-size:14px}.dots:after{content:"";animation:dots 1.2s steps(4,end) infinite}@keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}100%{content:""}}
-.error{margin-top:20px;padding:15px;background:#fce8e6;color:#b3261e;border-radius:6px;font-size:14px}.again{border-top:1px solid #eee;margin:30px 0;padding-top:20px}.again button{background:#fff;border:1px solid #dadce0;color:#1a73e8;border-radius:4px;padding:10px 16px;cursor:pointer}
-footer{font-size:11px;color:#9aa0a6;display:flex;justify-content:space-between;padding-top:20px}
-@media(max-width:700px){.app{padding:20px 16px}.logo{font-size:20px}.serp{margin-left:0}.topbar{gap:10px}.mini-logo{font-size:17px}.result-search{flex:1;width:auto}.top-beta{display:none}.troll:before{display:none}.mark{letter-spacing:-4px}}
-</style>
-</head>
-<body>
-<div class="app">
-<header><div class="logo"><span>T</span><span>R</span><span>O</span><span>O</span><span>L</span><span>L</span><span>gel</span></div><div class="badge">beta</div></header>
-<main>
-<section class="home" id="home"><div class="hero">
-<div class="mark"><span>T</span><span>R</span><span>O</span><span>O</span><span>L</span><span>L</span>gel</div>
-<div class="tagline">Search it wrong.</div>
-<form class="search" id="homeForm"><input id="homeQuery" placeholder="Ask anything..." autocomplete="off"><button>⌕</button></form>
-<div class="examples">Try asking something normal.</div>
-<div class="chips"><button class="chip">How do I become rich?</button><button class="chip">Why is the sky blue?</button><button class="chip">What should I eat?</button></div>
-</div></section>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  />
 
-<section class="results" id="results">
-<div class="topbar">
-<button class="mini-logo" id="logoBack"><span>T</span><span>R</span><span>O</span><span>O</span><span>L</span><span>L</span>gel</button>
-<form class="result-search" id="resultForm"><input id="resultQuery" autocomplete="off"><button>⌕</button></form><div class="top-beta">beta</div>
-</div>
-<div class="serp"><div class="tabs"><span class="active">All</span><span>Images</span><span>News</span><span>Maps</span><span>More</span></div>
-<div class="count" id="count"></div><div id="search-note">Results may contain information that is slightly less reliable than usual.</div><div id="list"></div>
-<div class="again"><button id="again">New search</button></div>
-</div>
-</section>
-</main>
-<footer><span>The internet's least reliable search engine.</span><span>© TROOLLgel</span></footer>
-</div>
-<script>
-const home=document.getElementById("home"), results=document.getElementById("results"), list=document.getElementById("list");
-const homeQuery=document.getElementById("homeQuery"), resultQuery=document.getElementById("resultQuery"), count=document.getElementById("count");
-function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
-async function search(q){
- q=q.trim();if(!q)return;
- home.style.display="none";results.style.display="block";resultQuery.value=q;list.innerHTML='<div class="loading">Searching the internet<span class="dots"></span></div>';window.scrollTo(0,0);
- try{
-  const r=await fetch("/api/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:q})});
-  const data=await r.json();if(!r.ok)throw new Error(data.error||"Search failed");
-  count.textContent="About "+esc(data.count||"a suspicious number")+" results";document.getElementById("search-note").textContent="Results are generated by TROOLLgel and may be slightly less reliable than usual.";
-  list.innerHTML=data.results.map(x=>`<article class="result ${x.troll?"troll":""}"><div class="url">${esc(x.url)}</div><div class="title">${esc(x.title)}</div><div class="snippet">${esc(x.snippet)}</div></article>`).join("");
- }catch(e){list.innerHTML='<div class="error">'+esc(e.message)+'</div>';}
-}
-document.getElementById("homeForm").onsubmit=e=>{e.preventDefault();search(homeQuery.value)};
-document.getElementById("resultForm").onsubmit=e=>{e.preventDefault();search(resultQuery.value)};
-document.querySelectorAll(".chip").forEach(x=>x.onclick=()=>search(x.textContent));
-document.getElementById("logoBack").onclick=()=>{results.style.display="none";home.style.display="flex";homeQuery.focus();window.scrollTo(0,0)};
-document.getElementById("again").onclick=()=>{results.style.display="none";home.style.display="flex";homeQuery.value="";homeQuery.focus();window.scrollTo(0,0)};
-</script>
+  <title>TROOLLgel</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      font-family: Arial, Helvetica, sans-serif;
+      color: #202124;
+      background: #fff;
+    }
+
+    body {
+      min-height: 100vh;
+    }
+
+    a {
+      color: inherit;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    /* =========================
+       HEADER
+    ========================= */
+
+    .topbar {
+      height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 0 28px;
+      gap: 24px;
+      font-size: 13px;
+      color: #5f6368;
+    }
+
+    .beta {
+      font-size: 11px;
+      color: #777;
+      letter-spacing: 0.2px;
+    }
+
+    /* =========================
+       LOGO
+    ========================= */
+
+    .logo {
+      font-size: 27px;
+      font-weight: 500;
+      letter-spacing: -1.7px;
+      line-height: 1;
+      white-space: nowrap;
+      user-select: none;
+    }
+
+    .logo .r {
+      color: #4285f4;
+    }
+
+    .logo .o1 {
+      color: #ea4335;
+    }
+
+    .logo .o2 {
+      color: #fbbc05;
+    }
+
+    .logo .l1 {
+      color: #4285f4;
+    }
+
+    .logo .l2 {
+      color: #34a853;
+    }
+
+    .logo .gel {
+      color: #202124;
+    }
+
+    /* =========================
+       SEARCH PAGE
+    ========================= */
+
+    .search-page {
+      width: 100%;
+    }
+
+    .search-header {
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .search-header-inner {
+      width: min(1040px, calc(100% - 40px));
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      padding: 7px 0 15px;
+    }
+
+    .header-logo {
+      flex: 0 0 auto;
+    }
+
+    .search-box {
+      flex: 0 0 630px;
+      max-width: 630px;
+      height: 44px;
+      border: 1px solid #dfe1e5;
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      padding: 0 14px 0 20px;
+      box-shadow: 0 1px 5px rgba(32, 33, 36, 0.12);
+      transition: box-shadow 0.15s ease;
+      background: #fff;
+    }
+
+    .search-box:hover,
+    .search-box:focus-within {
+      box-shadow:
+        0 1px 6px rgba(32, 33, 36, 0.18);
+    }
+
+    .search-input {
+      flex: 1;
+      min-width: 0;
+      border: 0;
+      outline: 0;
+      font-size: 16px;
+      color: #202124;
+      background: transparent;
+    }
+
+    .search-button {
+      width: 38px;
+      height: 38px;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .search-button:hover {
+      background: #f1f3f4;
+    }
+
+    .search-icon {
+      width: 19px;
+      height: 19px;
+      position: relative;
+    }
+
+    .search-icon::before {
+      content: "";
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      border: 2px solid #4285f4;
+      border-radius: 50%;
+      left: 1px;
+      top: 1px;
+    }
+
+    .search-icon::after {
+      content: "";
+      position: absolute;
+      width: 8px;
+      height: 2px;
+      background: #4285f4;
+      transform: rotate(45deg);
+      left: 11px;
+      top: 13px;
+      border-radius: 2px;
+    }
+
+    /* =========================
+       RESULTS NAV
+    ========================= */
+
+    .results-container {
+      width: min(1040px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+
+    .tabs {
+      height: 48px;
+      display: flex;
+      align-items: flex-end;
+      gap: 28px;
+      padding-left: 0;
+    }
+
+    .tab {
+      height: 48px;
+      display: flex;
+      align-items: center;
+      font-size: 13px;
+      color: #5f6368;
+      position: relative;
+      cursor: default;
+    }
+
+    .tab.active {
+      color: #1a73e8;
+    }
+
+    .tab.active::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 3px;
+      background: #1a73e8;
+      border-radius: 2px 2px 0 0;
+    }
+
+    /* =========================
+       RESULT META
+    ========================= */
+
+    .result-meta {
+      margin-top: 13px;
+      margin-bottom: 10px;
+      font-size: 12px;
+      color: #70757a;
+    }
+
+    /* =========================
+       DISCLAIMER
+    ========================= */
+
+    .disclaimer {
+      margin: 4px 0 13px;
+      font-size: 14px;
+      color: #3c4043;
+    }
+
+    /* =========================
+       RESULTS
+    ========================= */
+
+    .results {
+      width: 735px;
+      max-width: 100%;
+    }
+
+    .result {
+      margin-bottom: 27px;
+    }
+
+    .result-url {
+      font-size: 13px;
+      line-height: 20px;
+      color: #202124;
+      margin-bottom: 1px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+
+    .result-url a {
+      text-decoration: none;
+      color: #5f6368;
+    }
+
+    .result-url a:hover {
+      text-decoration: underline;
+    }
+
+    .result-title {
+      margin: 0 0 4px;
+      font-size: 20px;
+      line-height: 27px;
+      font-weight: 400;
+      color: #1a0dab;
+      cursor: pointer;
+    }
+
+    .result-title:hover {
+      text-decoration: underline;
+    }
+
+    .result-snippet {
+      font-size: 14px;
+      line-height: 21px;
+      color: #4d5156;
+      max-width: 700px;
+    }
+
+    /* Direct answer results */
+
+    .result.answer .result-title {
+      color: #1a0dab;
+    }
+
+    .result.answer .result-snippet {
+      color: #3c4043;
+    }
+
+    /* Mixed results */
+
+    .result.mixed {
+      padding-bottom: 1px;
+    }
+
+    /* =========================
+       LOADING
+    ========================= */
+
+    .loading {
+      display: none;
+      padding: 24px 0;
+      color: #70757a;
+      font-size: 14px;
+    }
+
+    .loading.visible {
+      display: block;
+    }
+
+    .loading-dots {
+      display: inline-flex;
+      gap: 4px;
+      margin-left: 5px;
+    }
+
+    .loading-dot {
+      width: 5px;
+      height: 5px;
+      background: #70757a;
+      border-radius: 50%;
+      animation: pulse 1.2s infinite ease-in-out;
+    }
+
+    .loading-dot:nth-child(2) {
+      animation-delay: 0.15s;
+    }
+
+    .loading-dot:nth-child(3) {
+      animation-delay: 0.3s;
+    }
+
+    @keyframes pulse {
+      0%,
+      60%,
+      100% {
+        opacity: 0.3;
+      }
+
+      30% {
+        opacity: 1;
+      }
+    }
+
+    /* =========================
+       ERROR
+    ========================= */
+
+    .error {
+      display: none;
+      margin: 25px 0;
+      font-size: 14px;
+      color: #5f6368;
+    }
+
+    .error.visible {
+      display: block;
+    }
+
+    /* =========================
+       NEW SEARCH
+    ========================= */
+
+    .new-search {
+      margin-top: 8px;
+      padding: 18px 0 60px;
+      border-top: 1px solid #f0f0f0;
+      width: 735px;
+      max-width: 100%;
+    }
+
+    .new-search button {
+      border: 1px solid #dadce0;
+      background: #fff;
+      color: #1a73e8;
+      border-radius: 4px;
+      padding: 9px 16px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .new-search button:hover {
+      background: #f8f9fa;
+      border-color: #c8cacc;
+    }
+
+    /* =========================
+       FOOTER
+    ========================= */
+
+    footer {
+      width: min(1040px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 18px 0 25px;
+      border-top: 1px solid #f0f0f0;
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #777;
+    }
+
+    /* =========================
+       EMPTY STATE
+    ========================= */
+
+    .empty {
+      padding: 35px 0;
+      color: #70757a;
+      font-size: 14px;
+    }
+
+    /* =========================
+       MOBILE
+    ========================= */
+
+    @media (max-width: 800px) {
+      .topbar {
+        height: 45px;
+        padding-right: 16px;
+      }
+
+      .search-header-inner {
+        width: calc(100% - 28px);
+        gap: 14px;
+      }
+
+      .header-logo .logo {
+        font-size: 21px;
+      }
+
+      .search-box {
+        flex: 1;
+        height: 42px;
+      }
+
+      .results-container {
+        width: calc(100% - 28px);
+      }
+
+      .results {
+        width: 100%;
+      }
+
+      .tabs {
+        gap: 20px;
+        overflow-x: auto;
+      }
+
+      .result {
+        margin-bottom: 25px;
+      }
+
+      .result-title {
+        font-size: 18px;
+        line-height: 25px;
+      }
+
+      footer {
+        width: calc(100% - 28px);
+      }
+    }
+
+    @media (max-width: 560px) {
+      .search-header-inner {
+        padding-top: 8px;
+      }
+
+      .header-logo {
+        display: none;
+      }
+
+      .search-box {
+        width: 100%;
+      }
+
+      .topbar {
+        height: 25px;
+      }
+
+      .beta {
+        font-size: 10px;
+      }
+
+      .tabs {
+        gap: 18px;
+      }
+
+      .tab {
+        font-size: 12px;
+      }
+
+      .result-meta {
+        font-size: 11px;
+      }
+
+      .disclaimer {
+        font-size: 13px;
+      }
+
+      .result-url {
+        font-size: 12px;
+      }
+
+      .result-snippet {
+        font-size: 14px;
+      }
+
+      footer {
+        flex-direction: column;
+        gap: 8px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="search-page">
+
+    <!-- TOP BAR -->
+    <div class="topbar">
+      <span class="beta">beta</span>
+    </div>
+
+    <!-- SEARCH HEADER -->
+    <div class="search-header">
+      <div class="search-header-inner">
+
+        <div class="header-logo">
+          <div class="logo">
+            <span class="r">T</span><span class="o1">R</span><span class="o2">O</span><span class="l1">O</span><span class="l2">L</span><span class="gel">Lgel</span>
+          </div>
+        </div>
+
+        <form class="search-box" id="searchForm">
+
+          <input
+            id="searchInput"
+            class="search-input"
+            type="text"
+            autocomplete="off"
+            placeholder="Search..."
+            aria-label="Search"
+          />
+
+          <button
+            class="search-button"
+            type="submit"
+            aria-label="Search"
+          >
+            <span class="search-icon"></span>
+          </button>
+
+        </form>
+
+      </div>
+    </div>
+
+    <!-- RESULTS -->
+    <main class="results-container">
+
+      <div class="tabs">
+        <div class="tab active">All</div>
+        <div class="tab">Images</div>
+        <div class="tab">News</div>
+        <div class="tab">Maps</div>
+        <div class="tab">More</div>
+      </div>
+
+      <div
+        id="resultMeta"
+        class="result-meta"
+        style="display: none;"
+      ></div>
+
+      <div
+        id="disclaimer"
+        class="disclaimer"
+        style="display: none;"
+      >
+        Results are generated by TROOLLgel and may be slightly less reliable than usual.
+      </div>
+
+      <div
+        id="loading"
+        class="loading"
+      >
+        Searching
+        <span class="loading-dots">
+          <span class="loading-dot"></span>
+          <span class="loading-dot"></span>
+          <span class="loading-dot"></span>
+        </span>
+      </div>
+
+      <div
+        id="error"
+        class="error"
+      ></div>
+
+      <div
+        id="results"
+        class="results"
+      ></div>
+
+      <div
+        id="newSearch"
+        class="new-search"
+        style="display: none;"
+      >
+        <button
+          type="button"
+          id="newSearchButton"
+        >
+          New search
+        </button>
+      </div>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer>
+      <span>The internet's least reliable search engine.</span>
+      <span>© TROOLLgel</span>
+    </footer>
+
+  </div>
+
+  <script>
+    const searchForm = document.getElementById("searchForm");
+    const searchInput = document.getElementById("searchInput");
+    const resultsContainer = document.getElementById("results");
+    const resultMeta = document.getElementById("resultMeta");
+    const disclaimer = document.getElementById("disclaimer");
+    const loading = document.getElementById("loading");
+    const errorBox = document.getElementById("error");
+    const newSearch = document.getElementById("newSearch");
+    const newSearchButton = document.getElementById("newSearchButton");
+
+    function setLoading(isLoading) {
+      if (isLoading) {
+        loading.classList.add("visible");
+        resultsContainer.innerHTML = "";
+        errorBox.classList.remove("visible");
+        resultMeta.style.display = "none";
+        disclaimer.style.display = "none";
+        newSearch.style.display = "none";
+      } else {
+        loading.classList.remove("visible");
+      }
+    }
+
+    function showError(message) {
+      loading.classList.remove("visible");
+      errorBox.textContent = message;
+      errorBox.classList.add("visible");
+      resultMeta.style.display = "none";
+      disclaimer.style.display = "none";
+      resultsContainer.innerHTML = "";
+      newSearch.style.display = "none";
+    }
+
+    function cleanUrl(url) {
+      try {
+        const parsed = new URL(url);
+
+        let text = parsed.hostname;
+
+        if (parsed.pathname && parsed.pathname !== "/") {
+          text += parsed.pathname;
+        }
+
+        return text;
+      } catch {
+        return String(url || "");
+      }
+    }
+
+    function createResult(result) {
+      const wrapper = document.createElement("div");
+
+      wrapper.className =
+        "result " +
+        (result.type || "link");
+
+      const url = document.createElement("div");
+      url.className = "result-url";
+
+      const urlLink = document.createElement("a");
+      urlLink.href = result.url || "#";
+      urlLink.target = "_blank";
+      urlLink.rel = "noopener noreferrer";
+      urlLink.textContent = cleanUrl(result.url);
+
+      url.appendChild(urlLink);
+
+      const title = document.createElement("div");
+      title.className = "result-title";
+      title.textContent =
+        result.title || "Untitled result";
+
+      const snippet = document.createElement("div");
+      snippet.className = "result-snippet";
+      snippet.textContent =
+        result.snippet || "";
+
+      wrapper.appendChild(url);
+      wrapper.appendChild(title);
+      wrapper.appendChild(snippet);
+
+      return wrapper;
+    }
+
+    async function performSearch(query) {
+      const cleanQuery = query.trim();
+
+      if (!cleanQuery) {
+        searchInput.focus();
+        return;
+      }
+
+      setLoading(true);
+
+      searchInput.value = cleanQuery;
+
+      try {
+        const response = await fetch("/api/search", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            query: cleanQuery
+          })
+        });
+
+        let data;
+
+        try {
+          data = await response.json();
+        } catch {
+          throw new Error(
+            "The search engine returned an unreadable response."
+          );
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            data.error ||
+            "The search engine is currently unavailable."
+          );
+        }
+
+        if (
+          !data ||
+          !Array.isArray(data.results)
+        ) {
+          throw new Error(
+            "TROOLLgel received an invalid result."
+          );
+        }
+
+        loading.classList.remove("visible");
+
+        const count =
+          data.count ||
+          "About 42,000 results";
+
+        resultMeta.textContent = count;
+        resultMeta.style.display = "block";
+
+        disclaimer.style.display = "block";
+
+        resultsContainer.innerHTML = "";
+
+        data.results.forEach((result) => {
+          resultsContainer.appendChild(
+            createResult(result)
+          );
+        });
+
+        newSearch.style.display = "block";
+
+      } catch (error) {
+
+        console.error(error);
+
+        showError(
+          error.message ||
+          "TROOLLgel tripped over its own wires."
+        );
+      }
+    }
+
+    searchForm.addEventListener(
+      "submit",
+      function (event) {
+        event.preventDefault();
+
+        performSearch(
+          searchInput.value
+        );
+      }
+    );
+
+    newSearchButton.addEventListener(
+      "click",
+      function () {
+        searchInput.value = "";
+        resultsContainer.innerHTML = "";
+        resultMeta.style.display = "none";
+        disclaimer.style.display = "none";
+        errorBox.classList.remove("visible");
+        newSearch.style.display = "none";
+
+        searchInput.focus();
+      }
+    );
+
+    // Allow URL queries such as:
+    // ?q=hello
+    const params =
+      new URLSearchParams(
+        window.location.search
+      );
+
+    const initialQuery =
+      params.get("q");
+
+    if (initialQuery) {
+      performSearch(initialQuery);
+    }
+  </script>
+
 </body>
 </html>
