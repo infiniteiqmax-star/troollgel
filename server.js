@@ -3,7 +3,7 @@ const path = require("path");
 
 const app = express();
 
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "20kb" }));
 
 // Serve the website
 app.use(express.static(path.join(__dirname, "public")));
@@ -12,31 +12,31 @@ app.use(express.static(path.join(__dirname, "public")));
 app.get("/api/health", (req, res) => {
   res.json({
     ok: true,
-    service: "TROOLLgel",
-    message: "The wires appear to be connected."
+    service: "TROOLLgel"
   });
 });
 
-// Main search endpoint
+// Search
 app.post("/api/search", async (req, res) => {
   const query = String(req.body?.query || "").trim();
 
   if (!query) {
     return res.status(400).json({
-      error: "Please enter a search query."
+      error: "Missing query"
     });
   }
 
   if (query.length > 500) {
     return res.status(400).json({
-      error: "That search is suspiciously long."
+      error: "Query too long"
     });
   }
 
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
-    console.error("OPENAI_API_KEY is missing.");
+    console.error("OPENAI_API_KEY is missing");
+
     return res.status(500).json({
       error: "OPENAI_API_KEY is not configured."
     });
@@ -45,90 +45,82 @@ app.post("/api/search", async (req, res) => {
   const systemPrompt = `
 You are the search engine behind TROOLLgel.
 
-TROOLLgel looks and behaves like a normal search engine, but its results can be subtly strange, funny, misleading, absurd, or unexpectedly useful.
+TROOLLgel looks like a normal search engine.
 
-The user gives you a search query.
+The important part is uncertainty.
 
-Your job is to create a believable search-results page.
+Sometimes return a normal-looking link.
+Sometimes return a direct answer.
+Sometimes return a mixture of links and answers.
 
-IMPORTANT:
+Do NOT always make the result obviously funny.
 
-- Return exactly 4 results.
-- Results should NOT always be AI answers.
-- Some results should look like normal web links.
-- Some results should contain a direct answer.
-- Some results can mix a link with an answer.
-- The combination should vary from query to query.
-- Do not always put the funny result first.
-- Do not make every result obviously absurd.
-- Preserve uncertainty.
-- The user should initially be able to believe that this is a normal search engine.
-- The humor should sometimes only become obvious after reading the result carefully.
+Some searches should look almost completely normal.
+Some should contain one suspicious detail.
+Some should be absurd.
+Some should be confidently wrong.
+Some should be technically correct but useless.
 
-Possible result types:
+The user should initially wonder whether they are looking at a real search engine.
 
-1. "link"
-A normal-looking search result with a fictional but plausible URL.
+Return exactly 4 results.
 
-2. "answer"
-A direct answer to the query, presented like a search result.
+Every result must contain:
 
-3. "mixed"
-A link-like result followed by a short answer or interpretation.
+title
+url
+snippet
+type
 
-Possible humor styles:
+type must be one of:
 
-- confidently wrong
-- technically correct but useless
-- literal interpretation
-- absurd expert reasoning
-- unexpected logic
-- almost completely normal except for one strange detail
-- surprisingly useful answer with a ridiculous explanation
-- completely unnecessary confidence
+link
+answer
+mixed
 
-Do NOT always make the result funny.
+Use fictional URLs only:
 
-Some searches should receive mostly normal-looking results.
+https://example.com/...
+https://troollgel.example/...
 
-Some searches should receive one suspicious result.
-
-Some searches should receive several strange results.
-
-The goal is uncertainty.
-
-IMPORTANT:
-Do not pretend that fictional websites are real.
-Use safe fictional domains such as:
-
-example.com
-troollgel.example
-search.example
-
-Do not impersonate real websites, people, companies or institutions.
-
-For high-risk medical, legal, financial, self-harm, violence or illegal queries, keep the response safe and do not provide harmful instructions.
+Never impersonate real websites.
 
 Do not mention that you are an AI.
-
 Do not explain the joke.
 
-Return ONLY valid JSON in exactly this structure:
+For dangerous medical, legal, financial, self-harm, violence or illegal queries,
+keep the response harmless and do not provide dangerous instructions.
+
+Return ONLY valid JSON.
+
+Use exactly this structure:
 
 {
   "count": "About 123,456 results",
   "results": [
     {
-      "title": "Example result title",
+      "title": "Example title",
       "url": "https://example.com/example",
-      "snippet": "Example search-result description.",
+      "snippet": "Example snippet",
       "type": "link"
     },
     {
       "title": "Example answer",
       "url": "https://troollgel.example/search",
-      "snippet": "Example answer presented as a search result.",
+      "snippet": "Example snippet",
       "type": "answer"
+    },
+    {
+      "title": "Example title",
+      "url": "https://example.com/example2",
+      "snippet": "Example snippet",
+      "type": "mixed"
+    },
+    {
+      "title": "Example title",
+      "url": "https://example.com/example3",
+      "snippet": "Example snippet",
+      "type": "link"
     }
   ]
 }
@@ -139,12 +131,14 @@ Return ONLY valid JSON in exactly this structure:
       "https://api.openai.com/v1/responses",
       {
         method: "POST",
+
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${apiKey}`
         },
+
         body: JSON.stringify({
-          model: process.env.OPENAI_MODEL || "gpt-5.6-luna",
+          model: "gpt-5",
 
           input: [
             {
@@ -171,37 +165,31 @@ Return ONLY valid JSON in exactly this structure:
     // OpenAI returned an error
     if (!response.ok) {
       console.error(
-        "OpenAI API error:",
+        "OpenAI error:",
         JSON.stringify(data, null, 2)
       );
 
       return res.status(502).json({
-        error: "The TROOLLgel search engine could not reach its brain."
+        error: "The AI search engine is currently unavailable."
       });
     }
 
-    /*
-      Responses API returns generated text inside
-      the response output structure.
-
-      We deliberately extract it instead of using
-      data.output_text, because this endpoint is using
-      the raw HTTP API rather than the OpenAI SDK.
-    */
-
+    // Extract generated text from the raw Responses API response
     let text = "";
 
     if (Array.isArray(data.output)) {
       for (const item of data.output) {
-        if (!Array.isArray(item.content)) continue;
+        if (!Array.isArray(item.content)) {
+          continue;
+        }
 
-        for (const content of item.content) {
+        for (const part of item.content) {
           if (
-            content &&
-            content.type === "output_text" &&
-            typeof content.text === "string"
+            part &&
+            part.type === "output_text" &&
+            typeof part.text === "string"
           ) {
-            text += content.text;
+            text += part.text;
           }
         }
       }
@@ -209,74 +197,76 @@ Return ONLY valid JSON in exactly this structure:
 
     if (!text) {
       console.error(
-        "OpenAI returned no usable text:",
+        "No text returned by OpenAI:",
         JSON.stringify(data, null, 2)
       );
 
       return res.status(502).json({
-        error: "TROOLLgel received an answer but couldn't read it."
+        error: "TROOLLgel received no usable answer."
       });
     }
 
-    // Remove accidental markdown fences if the model adds them
-    text = text
-      .trim()
-      .replace(/^```json\s*/i, "")
-      .replace(/^```\s*/i, "")
-      .replace(/\s*```$/i, "")
-      .trim();
+    text = text.trim();
 
-    let parsed;
+    // Remove accidental markdown code fences
+    if (text.startsWith("```json")) {
+      text = text.substring(7);
+    }
+
+    if (text.startsWith("```")) {
+      text = text.substring(3);
+    }
+
+    if (text.endsWith("```")) {
+      text = text.substring(0, text.length - 3);
+    }
+
+    text = text.trim();
+
+    let result;
 
     try {
-      parsed = JSON.parse(text);
+      result = JSON.parse(text);
     } catch (parseError) {
       console.error(
-        "Could not parse OpenAI JSON:",
+        "Invalid JSON from OpenAI:",
         text
       );
 
       return res.status(502).json({
-        error: "TROOLLgel received something that looked like JSON."
+        error: "TROOLLgel received an unreadable search result."
       });
     }
 
-    // Basic validation
     if (
-      !parsed ||
-      !Array.isArray(parsed.results)
+      !result ||
+      !Array.isArray(result.results)
     ) {
-      console.error(
-        "Invalid result structure:",
-        JSON.stringify(parsed, null, 2)
-      );
-
       return res.status(502).json({
         error: "TROOLLgel received an invalid search result."
       });
     }
 
-    // Keep the result page controlled
-    parsed.results = parsed.results
+    result.results = result.results
       .slice(0, 4)
-      .map((result) => ({
-        title: String(result.title || "Untitled result"),
-        url: String(result.url || "https://example.com"),
-        snippet: String(result.snippet || ""),
-        type: ["link", "answer", "mixed"].includes(result.type)
-          ? result.type
+      .map((item) => ({
+        title: String(item.title || "Untitled result"),
+        url: String(item.url || "https://example.com"),
+        snippet: String(item.snippet || ""),
+        type: ["link", "answer", "mixed"].includes(item.type)
+          ? item.type
           : "link"
       }));
 
-    if (!parsed.count) {
-      parsed.count = "About 42,000 results";
+    if (!result.count) {
+      result.count = "About 42,000 results";
     }
 
-    return res.status(200).json(parsed);
+    return res.status(200).json(result);
 
   } catch (error) {
     console.error(
-      "TROOLLgel search error:",
+      "TROOLLgel server error:",
       error
     );
 
@@ -286,14 +276,10 @@ Return ONLY valid JSON in exactly this structure:
   }
 });
 
-// Fallback for the homepage
-app.get("*", (req, res) => {
-  res.sendFile(
-    path.join(__dirname, "public", "index.html")
-  );
-});
+// Vercel handles the Express application
+module.exports = app;
 
-// Local development only
+// Local development
 if (!process.env.VERCEL) {
   const PORT = process.env.PORT || 3000;
 
@@ -303,6 +289,3 @@ if (!process.env.VERCEL) {
     );
   });
 }
-
-// Vercel uses the exported Express application
-module.exports = app;
