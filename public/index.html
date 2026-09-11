@@ -10,20 +10,25 @@ const count = document.getElementById("count");
 const note = document.getElementById("search-note");
 
 function esc(s) {
-  return String(s || "").replace(/[&<>"']/g, c => ({
-    "&":"&amp;",
-    "<":"&lt;",
-    ">":"&gt;",
-    '"':"&quot;",
-    "'":"&#39;"
+  return String(s ?? "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
   }[c]));
 }
 
 function renderResults(data) {
 
+  if (!data || typeof data !== "object") {
+    throw new Error("Invalid response from server.");
+  }
+
   if (data.mode === "answer" && data.answer) {
 
-    count.textContent = "About " + (data.count || "a suspicious number") + " results";
+    count.textContent =
+      "About " + (data.count || "a suspicious number") + " results";
 
     note.textContent =
       "TROOLLgel found something that looks like an answer. It may still be wrong.";
@@ -40,21 +45,30 @@ function renderResults(data) {
 
       ${
         sources.length
-        ? `
-          <div class="sources-title">Sources</div>
-          ${sources.map(x => `
-            <article class="result">
-              <div class="url">${esc(x.url)}</div>
-              <div class="title">
-                <a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">
-                  ${esc(x.title)}
-                </a>
-              </div>
-              <div class="snippet">${esc(x.snippet)}</div>
-            </article>
-          `).join("")}
-        `
-        : ""
+          ? `
+            <div class="sources-title">Sources</div>
+
+            ${sources.map(x => `
+              <article class="result">
+                <div class="url">${esc(x.url)}</div>
+
+                <div class="title">
+                  <a
+                    href="${esc(x.url)}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    ${esc(x.title)}
+                  </a>
+                </div>
+
+                <div class="snippet">
+                  ${esc(x.snippet)}
+                </div>
+              </article>
+            `).join("")}
+          `
+          : ""
       }
     `;
 
@@ -73,15 +87,25 @@ function renderResults(data) {
 
   list.innerHTML = items.map(x => `
     <article class="result ${x.troll ? "troll" : ""}">
-      <div class="url">${esc(x.url)}</div>
+
+      <div class="url">
+        ${esc(x.url)}
+      </div>
 
       <div class="title">
-        <a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">
+        <a
+          href="${esc(x.url)}"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
           ${esc(x.title)}
         </a>
       </div>
 
-      <div class="snippet">${esc(x.snippet)}</div>
+      <div class="snippet">
+        ${esc(x.snippet)}
+      </div>
+
     </article>
   `).join("");
 
@@ -108,44 +132,81 @@ async function search(q) {
     const response = await fetch("/api/search", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Accept": "application/json"
       },
       body: JSON.stringify({
         query: q
       })
     });
 
-    const data = await response.json();
+    /*
+     * Read the response as TEXT first.
+     * This prevents the frontend from crashing when
+     * the server accidentally returns plain text instead of JSON.
+     */
+    const raw = await response.text();
+
+    let data;
+
+    try {
+      data = JSON.parse(raw);
+    } catch (jsonError) {
+
+      console.error("Server returned non-JSON response:", raw);
+
+      throw new Error(
+        raw ||
+        "The server returned an invalid response."
+      );
+    }
 
     if (!response.ok) {
-      throw new Error(data.error || "Search failed");
+      throw new Error(
+        data.error ||
+        data.message ||
+        "Search failed."
+      );
     }
 
     renderResults(data);
 
   } catch (e) {
 
-    list.innerHTML =
-      '<div class="error">' +
-      esc(e.message) +
-      '</div>';
+    console.error("Search error:", e);
+
+    list.innerHTML = `
+      <div class="error">
+        ${esc(e.message || "Something went wrong.")}
+      </div>
+    `;
 
   }
 
 }
 
 document.getElementById("homeForm").onsubmit = e => {
+
   e.preventDefault();
+
   search(homeQuery.value);
+
 };
 
 document.getElementById("resultForm").onsubmit = e => {
+
   e.preventDefault();
+
   search(resultQuery.value);
+
 };
 
 document.querySelectorAll(".chip").forEach(x => {
-  x.onclick = () => search(x.textContent);
+
+  x.onclick = () => {
+    search(x.textContent);
+  };
+
 });
 
 document.getElementById("logoBack").onclick = () => {
