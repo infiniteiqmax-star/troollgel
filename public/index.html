@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TROOLLgel — Search it wrong.</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Arial,Helvetica,sans-serif;color:#202124;background:#fff}
+body{display:flex;justify-content:center}.app{width:min(1120px,100%);min-height:100vh;padding:26px 24px 36px;display:flex;flex-direction:column}
+header{display:flex;justify-content:space-between;align-items:center}.logo{font-size:23px;font-weight:700;letter-spacing:-1.5px}.badge{font-size:11px;color:#9aa0a6}
+.logo span:nth-child(1),.mini-logo span:nth-child(1),.mark span:nth-child(1){color:#4285f4}.logo span:nth-child(2),.mini-logo span:nth-child(2),.mark span:nth-child(2){color:#ea4335}.logo span:nth-child(3),.mini-logo span:nth-child(3),.mark span:nth-child(3){color:#fbbc05}.logo span:nth-child(4),.mini-logo span:nth-child(4),.mark span:nth-child(4){color:#4285f4}.logo span:nth-child(5),.mini-logo span:nth-child(5),.mark span:nth-child(5){color:#34a853}.logo span:nth-child(6),.mini-logo span:nth-child(6),.mark span:nth-child(6){color:#ea4335}
+main{flex:1}.home{min-height:72vh;display:flex;align-items:center;justify-content:center;text-align:center}.hero{width:min(760px,100%);margin-top:-7vh}.mark{font-size:clamp(60px,9vw,92px);font-weight:700;letter-spacing:-6px;line-height:.9;margin-bottom:25px}.tagline{font-size:18px;color:#5f6368;margin-bottom:34px}
+.search{display:flex;align-items:center;width:100%;height:52px;background:#fff;border:1px solid #dfe1e5;border-radius:28px;box-shadow:0 1px 6px rgba(32,33,36,.18);overflow:hidden}.search input{flex:1;border:0;outline:0;font-size:17px;padding:0 20px}.search button{height:100%;width:70px;border:0;background:#fff;color:#4285f4;font-size:24px;cursor:pointer}.examples{font-size:13px;color:#9aa0a6;margin-top:36px}.chips{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:11px}.chip{background:#fff;border:1px solid #dadce0;border-radius:18px;padding:7px 11px;color:#5f6368;font-size:12px;cursor:pointer}
+.results{display:none}.topbar{display:flex;align-items:center;gap:22px;padding:8px 0 16px;border-bottom:1px solid #f1f3f4}.mini-logo{background:none;border:0;padding:0;font-size:21px;font-weight:700;letter-spacing:-1.5px;cursor:pointer}.result-search{width:min(650px,65vw);height:46px;display:flex;border:1px solid #dfe1e5;border-radius:24px;box-shadow:0 1px 6px rgba(32,33,36,.18);overflow:hidden}.result-search input{flex:1;border:0;outline:0;padding:0 18px;font-size:16px}.result-search button{width:58px;border:0;background:#fff;color:#4285f4;font-size:25px;cursor:pointer}.top-beta{margin-left:auto;color:#9aa0a6;font-size:11px}.serp{width:min(760px,100%);margin-left:94px}.tabs{display:flex;gap:24px;height:48px;align-items:end;color:#5f6368;font-size:13px}.tabs .active{color:#1a73e8;border-bottom:3px solid #1a73e8;padding-bottom:12px}.tabs span:not(.active){padding-bottom:12px}.count{font-size:12px;color:#70757a;padding:14px 0 6px}.search-note{font-size:11px;color:#9aa0a6;padding-bottom:20px}
+.result{margin-bottom:30px;max-width:680px}.url{font-size:13px;color:#202124;margin-bottom:5px}.title{font-size:20px;color:#1a0dab;line-height:1.3;margin-bottom:4px;cursor:pointer}.title:hover{text-decoration:underline}.snippet{font-size:14px;line-height:1.55;color:#4d5156}.troll{position:relative}.troll:before{content:"TROOLLgel";position:absolute;left:-18px;top:2px;transform:translateX(-100%);font-size:8px;color:#9aa0a6;letter-spacing:.05em}.loading{padding:25px 0;color:#70757a;font-size:14px}.dots:after{content:"";animation:dots 1.2s steps(4,end) infinite}@keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}100%{content:""}}
+.error{margin-top:20px;padding:15px;background:#fce8e6;color:#b3261e;border-radius:6px;font-size:14px}.again{border-top:1px solid #eee;margin:30px 0;padding-top:20px}.again button{background:#fff;border:1px solid #dadce0;color:#1a73e8;border-radius:4px;padding:10px 16px;cursor:pointer}
+footer{font-size:11px;color:#9aa0a6;display:flex;justify-content:space-between;padding-top:20px}
+@media(max-width:700px){.app{padding:20px 16px}.logo{font-size:20px}.serp{margin-left:0}.topbar{gap:10px}.mini-logo{font-size:17px}.result-search{flex:1;width:auto}.top-beta{display:none}.troll:before{display:none}.mark{letter-spacing:-4px}}
+</style>
+</head>
+<body>
+<div class="app">
+<header><div class="logo"><span>T</span><span>R</span><span>O</span><span>O</span><span>L</span><span>L</span><span>gel</span></div><div class="badge">beta</div></header>
+<main>
+<section class="home" id="home"><div class="hero">
+<div class="mark"><span>T</span><span>R</span><span>O</span><span>O</span><span>L</span><span>L</span>gel</div>
+<div class="tagline">Search it wrong.</div>
+<form class="search" id="homeForm"><input id="homeQuery" placeholder="Ask anything..." autocomplete="off"><button>⌕</button></form>
+<div class="examples">Try asking something normal.</div>
+<div class="chips"><button class="chip">How do I become rich?</button><button class="chip">Why is the sky blue?</button><button class="chip">What should I eat?</button></div>
+</div></section>
+
+<section class="results" id="results">
+<div class="topbar">
+<button class="mini-logo" id="logoBack"><span>T</span><span>R</span><span>O</span><span>O</span><span>L</span><span>L</span>gel</button>
+<form class="result-search" id="resultForm"><input id="resultQuery" autocomplete="off"><button>⌕</button></form><div class="top-beta">beta</div>
+</div>
+<div class="serp"><div class="tabs"><span class="active">All</span><span>Images</span><span>News</span><span>Maps</span><span>More</span></div>
+<div class="count" id="count"></div><div id="search-note">Results may contain information that is slightly less reliable than usual.</div><div id="list"></div>
+<div class="again"><button id="again">New search</button></div>
+</div>
+</section>
+</main>
+<footer><span>The internet's least reliable search engine.</span><span>© TROOLLgel</span></footer>
+</div>
+<script>
+const home=document.getElementById("home"), results=document.getElementById("results"), list=document.getElementById("list");
+const homeQuery=document.getElementById("homeQuery"), resultQuery=document.getElementById("resultQuery"), count=document.getElementById("count");
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+async function search(q){
+ q=q.trim();if(!q)return;
+ home.style.display="none";results.style.display="block";resultQuery.value=q;list.innerHTML='<div class="loading">Searching the internet<span class="dots"></span></div>';window.scrollTo(0,0);
+ try{
+  const r=await fetch("/api/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:q})});
+  const data=await r.json();if(!r.ok)throw new Error(data.error||"Search failed");
+  count.textContent="About "+esc(data.count||"a suspicious number")+" results";document.getElementById("search-note").textContent="Results are generated by TROOLLgel and may be slightly less reliable than usual.";
+  list.innerHTML=data.results.map(x=>`<article class="result ${x.troll?"troll":""}"><div class="url">${esc(x.url)}</div><div class="title">${esc(x.title)}</div><div class="snippet">${esc(x.snippet)}</div></article>`).join("");
+ }catch(e){list.innerHTML='<div class="error">'+esc(e.message)+'</div>';}
+}
+document.getElementById("homeForm").onsubmit=e=>{e.preventDefault();search(homeQuery.value)};
+document.getElementById("resultForm").onsubmit=e=>{e.preventDefault();search(resultQuery.value)};
+document.querySelectorAll(".chip").forEach(x=>x.onclick=()=>search(x.textContent));
+document.getElementById("logoBack").onclick=()=>{results.style.display="none";home.style.display="flex";homeQuery.focus();window.scrollTo(0,0)};
+document.getElementById("again").onclick=()=>{results.style.display="none";home.style.display="flex";homeQuery.value="";homeQuery.focus();window.scrollTo(0,0)};
+</script>
+</body>
+</html>
