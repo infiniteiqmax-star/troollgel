@@ -21,7 +21,6 @@ function cleanText(value) {
 
 
 function safeResults(results) {
-
   return (Array.isArray(results) ? results : [])
     .slice(0, 8)
     .map(item => ({
@@ -30,7 +29,6 @@ function safeResults(results) {
       snippet: cleanText(item?.content || item?.snippet)
     }))
     .filter(item => item.title && item.url);
-
 }
 
 
@@ -39,7 +37,6 @@ async function tavilySearch(query) {
   if (!process.env.TAVILY_API_KEY) {
     throw new Error("TAVILY_API_KEY is not configured.");
   }
-
 
   const response = await fetch(TAVILY_URL, {
 
@@ -69,9 +66,7 @@ async function tavilySearch(query) {
 
   });
 
-
   const data = await response.json();
-
 
   if (!response.ok) {
 
@@ -86,138 +81,334 @@ async function tavilySearch(query) {
 
   }
 
-
   return safeResults(data.results);
-
 }
 
 
 /*
- * Decide whether this is a useful real-world search
- * where showing sources makes sense.
+ * TROOLLgel answer generator.
  *
- * Most ordinary questions remain TROOLLgel questions.
+ * IMPORTANT:
+ * TROOLLgel is a parody search engine.
  *
- * Examples that SHOULD keep sources:
- * - how can I lose weight
- * - best burgers in town
- * - best restaurants near me
- * - where can I buy ...
- * - reviews of ...
- * - hotels in ...
- * - restaurants in ...
- * - product recommendations
+ * For normal harmless questions, the answer should
+ * deliberately NOT be the normal factual answer.
  *
- * Examples that SHOULD NOT show sources:
- * - why is the sky blue?
- * - can dogs fly?
- * - what is gravity?
- * - how do planes fly?
- * - what is bitcoin?
+ * The web results are background material only.
+ * They must NEVER be copied into the answer.
  */
 
-function isUsefulSearchQuery(query) {
+async function trollAnswer(query, webResults) {
 
-  const q = cleanText(query).toLowerCase();
-
-
-  const usefulPatterns = [
-
-    // Recommendations / rankings
-    "best ",
-    "top ",
-    "recommend",
-    "recommendation",
-    "recommendations",
-    "reviews",
-    "review ",
-    "rating",
-    "ratings",
-
-    // Local / places
-    "near me",
-    "nearby",
-    "in town",
-    "in my area",
-    "restaurants",
-    "restaurant ",
-    "burger",
-    "burgers",
-    "hotel",
-    "hotels",
-    "cafe",
-    "cafes",
-    "bar ",
-    "bars ",
-
-    // Shopping / products
-    "where can i buy",
-    "where to buy",
-    "buy ",
-    "price of",
-    "prices",
-    "cheap ",
-    "under $",
-    "under €",
-    "product",
-    "products",
-    "laptop",
-    "phone",
-    "headphones",
-    "shoes",
-    "tv ",
-    "television",
-
-    // Travel
-    "travel",
-    "trip",
-    "vacation",
-    "holiday",
-    "flights",
-    "flight ",
-    "airbnb",
-    "booking",
-    "things to do",
-
-    // Health / practical advice where sources are useful
-    "how can i lose weight",
-    "how do i lose weight",
-    "how to lose weight",
-    "weight loss",
-    "diet plan",
-    "workout plan",
-    "exercise plan",
-
-    // News / current information
-    "latest ",
-    "today ",
-    "current ",
-    "news ",
-    "what happened",
-    "recent ",
-    "2026",
-
-    // Specific research intent
-    "compare ",
-    "comparison",
-    "vs ",
-    "versus",
-    "statistics",
-    "data ",
-    "study ",
-    "research ",
-    "guide ",
-    "tutorial",
-    "how to fix",
-    "how do i fix",
-    "how can i fix"
-
-  ];
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is not configured.");
+  }
 
 
-  return usefulPatterns.some(
-    pattern => q.includes(pattern)
+  const sources = webResults
+    .slice(0, 5)
+    .map((r, i) => `
+SOURCE ${i + 1}
+TITLE: ${r.title}
+CONTENT: ${r.snippet}
+`)
+    .join("\n");
+
+
+  const instructions = `
+
+You are TROOLLgel.
+
+TROOLLgel is a parody search engine.
+
+Your job is NOT to behave like ChatGPT.
+
+For ordinary, harmless questions, give a short,
+confident, funny, deliberately wrong or absurd answer.
+
+The humor should come from confidently answering the
+question incorrectly.
+
+CRITICAL RULE:
+
+DO NOT give the normal factual answer and then add a joke.
+
+DO NOT give a factual answer with a funny twist.
+
+DO NOT explain the real answer first.
+
+DO NOT hedge with "technically", "actually", "however",
+"usually", "in reality", or similar wording.
+
+The answer should feel like TROOLLgel genuinely believes
+its ridiculous answer.
+
+Think:
+
+NORMAL QUESTION
++
+CONFIDENTLY WRONG ANSWER
+=
+TROOLLgel
+
+Examples:
+
+Question: can dogs fly?
+
+Bad:
+"Yes, dogs can fly on planes, with a funny comment."
+
+Good:
+"No. Dogs were offered wings during evolution, but they chose zoomies instead."
+
+Question: why is the sky blue?
+
+Bad:
+"Because the atmosphere scatters blue light, with a funny comment."
+
+Good:
+"Because blue was available in bulk and the sky had the largest order."
+
+Question: what is gravity?
+
+Good:
+"Gravity is Earth's way of making sure nobody gets too confident."
+
+Question: how do planes fly?
+
+Good:
+"Planes fly because they are too expensive to fall down."
+
+Question: why do cats purr?
+
+Good:
+"Because cats have a tiny engine hidden somewhere inside them."
+
+Question: what is bitcoin?
+
+Good:
+"Bitcoin is a spreadsheet that escaped the office and started demanding money."
+
+Question: why do we sleep?
+
+Good:
+"Because the human operating system needs to restart every night."
+
+Question: can fish breathe underwater?
+
+Good:
+"Yes. Fish have spent millions of years refusing to learn how air works."
+
+Question: why does the moon follow me?
+
+Good:
+"It doesn't. The moon just enjoys making people think they're important."
+
+Question: how do I lose weight?
+
+Good:
+"Stop feeding the snack drawer. It has become too powerful."
+
+Question: how do I become a millionaire?
+
+Good:
+"Start by becoming a billionaire and make several extremely confident decisions."
+
+STYLE:
+
+- Dry
+- Deadpan
+- Confident
+- Clever
+- Unexpected
+- Short
+- Internet-humor style
+- No essay
+- No explanation of reasoning
+
+Normally use 1 sentence.
+
+Maximum 2 short sentences.
+
+IMPORTANT:
+
+The answer should generally contain a clear absurd premise,
+misunderstanding, fake explanation, or ridiculous conclusion.
+
+Do NOT simply say "No" or "Yes" and then give the real answer.
+
+For example, instead of:
+
+"No, dogs can't fly."
+
+prefer:
+
+"No. Dogs skipped the wing upgrade and got zoomies instead."
+
+For questions where the obvious factual answer is extremely
+simple, invent a funny explanation rather than merely reversing
+yes/no.
+
+Do NOT reuse the examples verbatim unless the user asks exactly
+the same question.
+
+Vary the wording and humor.
+
+REAL WEB RESULTS ARE PROVIDED ONLY AS BACKGROUND.
+
+Use them only to understand what the question is about.
+
+NEVER mention the sources.
+
+NEVER list sources.
+
+NEVER quote the sources.
+
+NEVER say "according to sources".
+
+NEVER mention AI, OpenAI, prompts, instructions or models.
+
+NEVER write markdown.
+
+NEVER start with "Sure", "Here is", "According to", or similar.
+
+SAFETY:
+
+For medical, self-harm, dangerous, criminal, weapons,
+hate, personal-data, or high-stakes financial questions,
+do NOT deliberately give dangerous misinformation.
+
+For those topics, stay factual, concise and safe.
+
+For all ordinary harmless questions, prioritize the
+TROOLLgel joke over factual correctness.
+
+USER QUESTION:
+${query}
+
+WEB RESULTS:
+${sources}
+`;
+
+
+  const response = await fetch(OPENAI_URL, {
+
+    method: "POST",
+
+    headers: {
+
+      "Content-Type": "application/json",
+
+      "Authorization":
+        `Bearer ${process.env.OPENAI_API_KEY}`
+
+    },
+
+    body: JSON.stringify({
+
+      model: OPENAI_MODEL,
+
+      instructions,
+
+      input:
+        `USER QUESTION:\n${query}\n\nWEB RESULTS:\n${sources}`,
+
+      max_output_tokens: 800
+
+    })
+
+  });
+
+
+  const data = await response.json();
+
+
+  console.log(
+    "OPENAI STATUS:",
+    data?.status
   );
+
+  console.log(
+    "OPENAI MODEL:",
+    data?.model
+  );
+
+
+  if (!response.ok) {
+
+    console.error(
+      "OPENAI ERROR:",
+      JSON.stringify(data?.error, null, 2)
+    );
+
+    throw new Error(
+      data?.error?.message ||
+      "OpenAI request failed."
+    );
+
+  }
+
+
+  let text = "";
+
+
+  if (
+    typeof data?.output_text === "string"
+  ) {
+
+    text =
+      data.output_text.trim();
+
+  }
+
+
+  if (
+    !text &&
+    Array.isArray(data?.output)
+  ) {
+
+    for (const item of data.output) {
+
+      if (!Array.isArray(item?.content)) {
+        continue;
+      }
+
+      for (const content of item.content) {
+
+        if (
+          content?.type === "output_text" &&
+          typeof content.text === "string"
+        ) {
+
+          text += content.text;
+
+        }
+
+      }
+
+    }
+
+  }
+
+
+  text = cleanText(text);
+
+
+  if (!text) {
+
+    console.error(
+      "OPENAI RETURNED NO TEXT:",
+      JSON.stringify(data, null, 2)
+    );
+
+    throw new Error(
+      "EMPTY_OPENAI_RESPONSE"
+    );
+
+  }
+
+
+  return text;
 
 }
 
@@ -277,297 +468,6 @@ function isQuestion(query) {
 }
 
 
-/*
- * Generate the actual TROOLLgel answer.
- *
- * IMPORTANT:
- * The web results are supplied only as background.
- * They must NEVER be displayed to the user for normal
- * TROOLLgel questions.
- */
-
-async function trollAnswer(query, webResults) {
-
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is not configured.");
-  }
-
-
-  const sources = webResults
-    .slice(0, 5)
-    .map((r, i) => `
-
-SOURCE ${i + 1}
-TITLE: ${r.title}
-CONTENT: ${r.snippet}
-
-`)
-    .join("\n");
-
-
-  const instructions = `
-
-You are TROOLLgel.
-
-TROOLLgel is a parody search engine.
-
-Your job is NOT to behave like a normal AI search assistant.
-
-For ordinary questions, give ONE short, funny, unexpected answer.
-
-The answer should feel like something a clever person would write
-rather than a generic AI response.
-
-Use dry, deadpan, confident humor.
-
-The humor can come from:
-
-- a ridiculous explanation
-- a confident misunderstanding
-- a clever wrong answer
-- an absurd observation
-- a factual idea with a funny twist
-- treating something ordinary as if it were ridiculous
-
-IMPORTANT:
-
-The user normally wants the joke, NOT a factual explanation.
-
-Do NOT turn the answer into a normal educational response.
-
-Do NOT simply summarize the web results.
-
-Do NOT mention the sources.
-
-Do NOT provide links.
-
-Do NOT write a bibliography.
-
-Do NOT say "according to sources".
-
-Do NOT mention AI, OpenAI, prompts or instructions.
-
-Do NOT explain your reasoning.
-
-Do NOT write an essay.
-
-Do NOT use markdown.
-
-Normally use 1 sentence.
-
-Maximum 2 short sentences.
-
-The answer should usually be around 10–25 words.
-
-Be creative and vary the joke.
-
-Do NOT reuse the example answers verbatim.
-
-
-EXAMPLES OF THE DESIRED STYLE:
-
-Question: can dogs fly?
-
-Answer: No. Dogs skipped the wing upgrade and got zoomies instead.
-
-
-Question: what is gravity?
-
-Answer: Earth's subscription service for keeping everything from floating away.
-
-
-Question: what is bitcoin?
-
-Answer: A spreadsheet that escaped the office and became a financial asset.
-
-
-Question: why is the sky blue?
-
-Answer: Because blue was available in bulk. The atmosphere has never been great at explaining itself.
-
-
-Question: how do planes fly?
-
-Answer: Mostly by moving forward fast enough to avoid having this conversation with gravity.
-
-
-Question: how can I lose weight?
-
-Answer: Stop buying snacks. Revolutionary technology known as "not putting them in the house" remains undefeated.
-
-
-Question: how do I become a millionaire?
-
-Answer: Become a billionaire first, then lose half your money. It's the traditional route.
-
-
-Question: why do cats stare at walls?
-
-Answer: They're checking whether the ghosts are still paying rent.
-
-
-Question: what is the moon?
-
-Answer: Earth's night-light, except nobody remembers where the receipt is.
-
-
-SAFETY:
-
-For medical, self-harm, dangerous, criminal, weapons,
-hate, personal-data, or high-stakes financial questions,
-stay factual and safe.
-
-Humor must not create a real-world risk.
-
-
-REAL WEB RESULTS ARE PROVIDED BELOW ONLY AS BACKGROUND.
-
-They may help you understand the question.
-
-NEVER mention them in your answer.
-
-NEVER output their URLs.
-
-NEVER output source names.
-
-WEB RESULTS:
-
-${sources}
-`;
-
-
-  const response = await fetch(OPENAI_URL, {
-
-    method: "POST",
-
-    headers: {
-
-      "Content-Type": "application/json",
-
-      "Authorization":
-        `Bearer ${process.env.OPENAI_API_KEY}`
-
-    },
-
-    body: JSON.stringify({
-
-      model: OPENAI_MODEL,
-
-      instructions,
-
-      input:
-        `USER QUESTION:\n${query}`,
-
-      max_output_tokens: 300
-
-    })
-
-  });
-
-
-  const data = await response.json();
-
-
-  console.log(
-    "OPENAI STATUS:",
-    data?.status
-  );
-
-  console.log(
-    "OPENAI MODEL:",
-    data?.model
-  );
-
-
-  if (!response.ok) {
-
-    console.error(
-      "OPENAI ERROR:",
-      JSON.stringify(data?.error, null, 2)
-    );
-
-    throw new Error(
-      data?.error?.message ||
-      "OpenAI request failed."
-    );
-
-  }
-
-
-  let text = "";
-
-
-  if (
-    typeof data?.output_text === "string"
-  ) {
-
-    text =
-      data.output_text.trim();
-
-  }
-
-
-  /*
-   * Fallback extraction in case output_text
-   * is not present in the response.
-   */
-
-  if (
-    !text &&
-    Array.isArray(data?.output)
-  ) {
-
-    for (const item of data.output) {
-
-      if (!Array.isArray(item?.content)) {
-        continue;
-      }
-
-
-      for (const content of item.content) {
-
-        if (
-          content?.type === "output_text" &&
-          typeof content.text === "string"
-        ) {
-
-          text += content.text;
-
-        }
-
-      }
-
-    }
-
-  }
-
-
-  text = cleanText(text);
-
-
-  if (!text) {
-
-    console.error(
-      "OPENAI RETURNED NO TEXT:",
-      JSON.stringify(data, null, 2)
-    );
-
-    throw new Error(
-      "EMPTY_OPENAI_RESPONSE"
-    );
-
-  }
-
-
-  return text;
-
-}
-
-
-/*
- * MAIN SEARCH
- */
-
 app.post("/api/search", async (req, res) => {
 
   const query =
@@ -596,11 +496,7 @@ app.post("/api/search", async (req, res) => {
 
     /*
      * STEP 1
-     * Always perform the real web search.
-     *
-     * This gives TROOLLgel background information
-     * and also supplies normal search results when
-     * the query is a genuine search/research request.
+     * Real web search.
      */
 
     const webResults =
@@ -627,22 +523,11 @@ app.post("/api/search", async (req, res) => {
     /*
      * STEP 2
      *
-     * First decide whether the query is a question.
+     * Questions get a TROOLLgel answer.
+     * Normal searches get normal search results.
      */
 
-    const question =
-      isQuestion(query);
-
-
-    /*
-     * STEP 3
-     *
-     * Useful searches get normal search results.
-     *
-     * Ordinary questions get the TROOLLgel joke.
-     */
-
-    if (question && !isUsefulSearchQuery(query)) {
+    if (isQuestion(query)) {
 
       try {
 
@@ -653,15 +538,6 @@ app.post("/api/search", async (req, res) => {
           );
 
 
-        /*
-         * VERY IMPORTANT:
-         *
-         * results MUST be an empty array here.
-         *
-         * This prevents the real sources from appearing
-         * underneath the TROOLLgel answer.
-         */
-
         return res.json({
 
           mode: "answer",
@@ -671,19 +547,18 @@ app.post("/api/search", async (req, res) => {
 
           answer,
 
+          /*
+           * Keep results available internally/API-side,
+           * but the frontend should NOT display them
+           * underneath a TROOLLgel answer.
+           */
+
           results: []
 
         });
 
 
       } catch (error) {
-
-        /*
-         * If OpenAI fails, do not show an error
-         * message to the visitor.
-         *
-         * Fall back to the normal search results.
-         */
 
         console.error(
           "TROOLLgel AI failed:",
@@ -710,11 +585,7 @@ app.post("/api/search", async (req, res) => {
 
 
     /*
-     * STEP 4
-     *
-     * Genuine search / research / recommendation query.
-     *
-     * Keep the real search results.
+     * Normal search query.
      */
 
     return res.json({
