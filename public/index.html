@@ -4,157 +4,817 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>TROOLLgel</title>
+
 <style>
-*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Arial,Helvetica,sans-serif;color:#202124;background:#fff}button,input{font:inherit}
-.logo{font-size:57px;line-height:1;font-weight:400;letter-spacing:-3.2px;white-space:nowrap;user-select:none}
-.blue{color:#4285f4}.red{color:#ea4335}.yellow{color:#fbbc05}.green{color:#34a853}
-#home{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding-top:17vh}
-.home-logo{margin-bottom:40px}.home-search-wrap{width:min(700px,calc(100vw - 28px))}
-.search-form{width:100%}.search-box{width:100%;height:62px;border:1px solid #dfe1e5;border-radius:32px;display:flex;align-items:center;padding:0 21px;box-shadow:0 2px 8px rgba(60,64,67,.12);background:#fff}
-.search-box:hover,.search-box:focus-within{box-shadow:0 2px 10px rgba(60,64,67,.18),0 1px 2px rgba(60,64,67,.08)}
-.search-icon{width:22px;height:22px;margin-right:16px;flex:0 0 auto;position:relative}.search-icon:before{content:"";position:absolute;width:12px;height:12px;border:2px solid #9aa0a6;border-radius:50%;left:1px;top:1px}.search-icon:after{content:"";position:absolute;width:8px;height:2px;background:#9aa0a6;transform:rotate(45deg);left:13px;top:15px;border-radius:2px}
-.search-input{flex:1;min-width:0;border:0;outline:0;background:transparent;color:#202124;font-size:18px}.search-input::placeholder{color:#9aa0a6}
-.search-submit{border:0;background:transparent;color:#1a73e8;cursor:pointer;font-size:16px;padding:8px 2px 8px 16px}.search-submit:hover{text-decoration:underline}
-.home-note{margin-top:28px;color:#5f6368;font-size:14px}
-#results{display:none}.results-header{min-height:88px;border-bottom:1px solid #dadce0;display:flex;align-items:center;gap:34px;padding:0 32px}
-.results-logo{font-size:40px;cursor:pointer}.results-search-wrap{width:min(720px,calc(100vw - 280px))}.results-search-box{height:52px}.results-search-box .search-input{font-size:16px}
-.tabs-wrap,.results-content{width:min(1050px,calc(100vw - 80px));margin:0 auto}.tabs-wrap{border-bottom:1px solid #dadce0}.tabs{height:54px;display:flex;align-items:center;gap:34px}.tab{height:54px;display:flex;align-items:center;color:#5f6368;font-size:14px;position:relative}.tab.active{color:#1a73e8}.tab.active:after{content:"";position:absolute;height:3px;background:#1a73e8;left:0;right:0;bottom:-1px}
-.results-content{padding-top:18px;padding-bottom:60px}#count{color:#5f6368;font-size:14px;margin-bottom:8px}#search-note{color:#5f6368;font-size:14px;margin-bottom:26px}
-.answer-box{border:1px solid #dadce0;border-radius:12px;padding:20px 22px;margin-bottom:34px;max-width:850px}.answer-label{color:#5f6368;font-size:13px;margin-bottom:10px}.answer-text{font-size:22px;line-height:1.55}.answer-actions{margin-top:18px}.share-button,.again{border:1px solid #dadce0;border-radius:18px;background:#fff;color:#5f6368;padding:7px 13px;cursor:pointer;font-size:13px}.share-button:hover,.again:hover{background:#f8f9fa;color:#202124}
-.sources-title{font-weight:600;font-size:15px;margin-bottom:20px;color:#3c4043}.result{max-width:850px;margin-bottom:30px}.url{color:#5f6368;font-size:13px;line-height:1.35;margin-bottom:5px;overflow-wrap:anywhere}.title{font-size:20px;line-height:1.3;margin-bottom:5px}.title a{color:#1a0dab;text-decoration:none}.title a:hover{text-decoration:underline}.snippet{color:#4d5156;font-size:14px;line-height:1.55}.again-wrap{margin-top:38px}.again{border-radius:4px;font-size:14px;padding:9px 15px}.loading,.error{color:#5f6368;font-size:15px;padding:25px 0}.error{color:#d93025}
-.dots:after{content:"";animation:dots 1.2s steps(4,end) infinite}@keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}100%{content:""}}
-@media(max-width:700px){.logo{font-size:48px;letter-spacing:-2.8px}#home{padding-top:14vh}.home-logo{margin-bottom:32px}.search-box{height:56px;padding:0 16px}.search-input{font-size:16px}.results-header{padding:12px 14px;gap:14px}.results-logo{font-size:31px}.results-search-wrap{width:auto;flex:1}.results-search-box{height:48px}.results-content,.tabs-wrap{width:calc(100vw - 28px)}.tabs{gap:24px}.answer-text{font-size:18px}.title{font-size:18px}.home-note{text-align:center;padding:0 20px}}
+
+*{
+  box-sizing:border-box
+}
+
+html,
+body{
+  margin:0;
+  min-height:100%;
+  font-family:Arial,Helvetica,sans-serif;
+  color:#202124;
+  background:#fff
+}
+
+button,
+input{
+  font:inherit
+}
+
+
+/* =========================
+   LOGO
+========================= */
+
+.logo{
+  font-size:57px;
+  line-height:1;
+  font-weight:400;
+  letter-spacing:-3.2px;
+  white-space:nowrap;
+  user-select:none
+}
+
+.blue{
+  color:#4285f4
+}
+
+.red{
+  color:#ea4335
+}
+
+.yellow{
+  color:#fbbc05
+}
+
+.green{
+  color:#34a853
+}
+
+
+/* =========================
+   HOME
+========================= */
+
+#home{
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  padding-top:17vh
+}
+
+.home-logo{
+  margin-bottom:40px
+}
+
+.home-search-wrap{
+  width:min(700px,calc(100vw - 28px))
+}
+
+.search-form{
+  width:100%
+}
+
+.search-box{
+  width:100%;
+  height:62px;
+  border:1px solid #dfe1e5;
+  border-radius:32px;
+  display:flex;
+  align-items:center;
+  padding:0 21px;
+  box-shadow:0 2px 8px rgba(60,64,67,.12);
+  background:#fff
+}
+
+.search-box:hover,
+.search-box:focus-within{
+  box-shadow:
+    0 2px 10px rgba(60,64,67,.18),
+    0 1px 2px rgba(60,64,67,.08)
+}
+
+.search-icon{
+  width:22px;
+  height:22px;
+  margin-right:16px;
+  flex:0 0 auto;
+  position:relative
+}
+
+.search-icon:before{
+  content:"";
+  position:absolute;
+  width:12px;
+  height:12px;
+  border:2px solid #9aa0a6;
+  border-radius:50%;
+  left:1px;
+  top:1px
+}
+
+.search-icon:after{
+  content:"";
+  position:absolute;
+  width:8px;
+  height:2px;
+  background:#9aa0a6;
+  transform:rotate(45deg);
+  left:13px;
+  top:15px;
+  border-radius:2px
+}
+
+.search-input{
+  flex:1;
+  min-width:0;
+  border:0;
+  outline:0;
+  background:transparent;
+  color:#202124;
+  font-size:18px
+}
+
+.search-input::placeholder{
+  color:#9aa0a6
+}
+
+.search-submit{
+  border:0;
+  background:transparent;
+  color:#1a73e8;
+  cursor:pointer;
+  font-size:16px;
+  padding:8px 2px 8px 16px
+}
+
+.search-submit:hover{
+  text-decoration:underline
+}
+
+.home-note{
+  margin-top:28px;
+  color:#5f6368;
+  font-size:14px
+}
+
+
+/* =========================
+   RESULTS
+========================= */
+
+#results{
+  display:none
+}
+
+.results-header{
+  min-height:88px;
+  border-bottom:1px solid #dadce0;
+  display:flex;
+  align-items:center;
+  gap:34px;
+  padding:0 32px
+}
+
+.results-logo{
+  font-size:40px;
+  cursor:pointer
+}
+
+.results-search-wrap{
+  width:min(720px,calc(100vw - 280px))
+}
+
+.results-search-box{
+  height:52px
+}
+
+.results-search-box .search-input{
+  font-size:16px
+}
+
+
+/* =========================
+   TABS
+========================= */
+
+.tabs-wrap,
+.results-content{
+  width:min(1050px,calc(100vw - 80px));
+  margin:0 auto
+}
+
+.tabs-wrap{
+  border-bottom:1px solid #dadce0
+}
+
+.tabs{
+  height:54px;
+  display:flex;
+  align-items:center;
+  gap:34px
+}
+
+.tab{
+  height:54px;
+  display:flex;
+  align-items:center;
+  color:#5f6368;
+  font-size:14px;
+  position:relative
+}
+
+.tab.active{
+  color:#1a73e8
+}
+
+.tab.active:after{
+  content:"";
+  position:absolute;
+  height:3px;
+  width:18px;
+  background:#1a73e8;
+  bottom:-1px;
+  left:50%;
+  transform:translateX(-50%)
+}
+
+
+/* =========================
+   RESULT CONTENT
+========================= */
+
+.results-content{
+  padding-bottom:80px
+}
+
+#count{
+  margin-top:20px;
+  font-size:13px;
+  color:#5f6368
+}
+
+#search-note{
+  margin-top:10px;
+  margin-bottom:26px;
+  font-size:14px;
+  color:#5f6368
+}
+
+
+/* =========================
+   NORMAL RESULT
+========================= */
+
+.result{
+  margin-bottom:29px;
+  max-width:850px
+}
+
+.url{
+  font-size:12px;
+  line-height:18px;
+  color:#5f6368;
+  margin-bottom:3px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis
+}
+
+.title{
+  font-size:20px;
+  line-height:26px;
+  margin-bottom:5px
+}
+
+.title a{
+  color:#1a0dab;
+  text-decoration:none
+}
+
+.title a:hover{
+  text-decoration:underline
+}
+
+.snippet{
+  font-size:14px;
+  line-height:21px;
+  color:#4d5156;
+  max-width:850px
+}
+
+
+/* =========================
+   TROLL RESULT
+========================= */
+
+.result.troll{
+  opacity:.96
+}
+
+.result.troll .title a{
+  color:#d93025
+}
+
+
+/* =========================
+   AI ANSWER
+========================= */
+
+.answer-box{
+  max-width:850px;
+  margin:26px 0 32px;
+  padding:20px 22px;
+  border:1px solid #e5e7eb;
+  border-radius:10px;
+  background:#fafafa
+}
+
+.answer-label{
+  font-size:12px;
+  color:#5f6368;
+  margin-bottom:9px
+}
+
+.answer-text{
+  font-size:18px;
+  line-height:29px;
+  color:#202124
+}
+
+
+/* =========================
+   SOURCES
+========================= */
+
+.sources-title{
+  max-width:850px;
+  margin:0 0 18px;
+  padding-top:4px;
+  font-size:14px;
+  font-weight:600;
+  color:#5f6368
+}
+
+
+/* =========================
+   SHARE
+========================= */
+
+.answer-actions{
+  margin-top:18px
+}
+
+.share-button{
+  border:1px solid #dadce0;
+  background:#fff;
+  color:#3c4043;
+  border-radius:18px;
+  padding:7px 13px;
+  font-size:13px;
+  cursor:pointer
+}
+
+.share-button:hover{
+  background:#f8f9fa
+}
+
+
+/* =========================
+   LOADING
+========================= */
+
+.loading{
+  color:#5f6368;
+  font-size:14px;
+  margin-top:30px
+}
+
+.dots:after{
+  content:"";
+  animation:dots 1.2s infinite
+}
+
+@keyframes dots{
+
+  0%{
+    content:""
+  }
+
+  33%{
+    content:"."
+  }
+
+  66%{
+    content:".."
+  }
+
+  100%{
+    content:"..."
+  }
+
+}
+
+
+/* =========================
+   ERROR
+========================= */
+
+.error{
+  margin-top:30px;
+  color:#d93025;
+  font-size:14px
+}
+
+
+/* =========================
+   NEW SEARCH
+========================= */
+
+.again-wrap{
+  margin-top:30px
+}
+
+.again{
+  border:1px solid #dadce0;
+  background:#fff;
+  color:#3c4043;
+  border-radius:5px;
+  padding:9px 17px;
+  cursor:pointer;
+  font-size:14px
+}
+
+.again:hover{
+  background:#f8f9fa
+}
+
+
+/* =========================
+   MOBILE
+========================= */
+
+@media(max-width:700px){
+
+  .logo{
+    font-size:48px
+  }
+
+  #home{
+    padding-top:14vh
+  }
+
+  .results-header{
+    padding:16px 20px;
+    flex-direction:column;
+    align-items:flex-start;
+    gap:14px
+  }
+
+  .results-search-wrap{
+    width:100%
+  }
+
+  .results-content,
+  .tabs-wrap{
+    width:calc(100vw - 40px)
+  }
+
+  .tabs{
+    gap:24px
+  }
+
+  .title{
+    font-size:18px
+  }
+
+  .answer-text{
+    font-size:17px
+  }
+
+}
+
 </style>
 </head>
+
+
 <body>
 
+
+<!-- =========================
+     HOME PAGE
+========================= -->
+
 <main id="home">
+
   <div class="home-logo logo" aria-label="TROOLLgel">
-    <span class="blue">T</span><span class="red">R</span><span class="yellow">O</span><span class="blue">O</span><span class="green">L</span><span class="red">L</span><span class="blue">g</span><span class="red">e</span><span class="green">l</span>
+
+    <span class="blue">T</span>
+    <span class="red">R</span>
+    <span class="yellow">O</span>
+    <span class="blue">O</span>
+    <span class="green">L</span>
+    <span class="red">L</span>
+    <span class="blue">g</span>
+    <span class="red">e</span>
+    <span class="green">l</span>
+
   </div>
+
 
   <div class="home-search-wrap">
+
     <form id="homeForm" class="search-form">
+
       <div class="search-box">
+
         <div class="search-icon"></div>
-        <input id="homeQuery" class="search-input" autocomplete="off" placeholder="Search TROOLLgel" aria-label="Search TROOLLgel">
-        <button class="search-submit" type="submit">Search</button>
+
+        <input
+          id="homeQuery"
+          class="search-input"
+          type="text"
+          autocomplete="off"
+          placeholder="Search TROOLLgel"
+          aria-label="Search"
+        />
+
+        <button
+          class="search-submit"
+          type="submit"
+        >
+          Search
+        </button>
+
       </div>
+
     </form>
+
   </div>
 
-  <div class="home-note">Real answers are overrated.</div>
+
+  <div class="home-note">
+    Results may contain information that is slightly less reliable than usual.
+  </div>
+
 </main>
+
+
+
+<!-- =========================
+     RESULTS PAGE
+========================= -->
 
 <main id="results">
 
   <header class="results-header">
 
-    <div id="logoBack" class="results-logo logo" title="Back to TROOLLgel">
-      <span class="blue">T</span><span class="red">R</span><span class="yellow">O</span><span class="blue">O</span><span class="green">L</span><span class="red">L</span><span class="blue">g</span><span class="red">e</span><span class="green">l</span>
+    <div
+      id="logoBack"
+      class="results-logo logo"
+      aria-label="TROOLLgel"
+      title="Back to TROOLLgel"
+    >
+
+      <span class="blue">T</span>
+      <span class="red">R</span>
+      <span class="yellow">O</span>
+      <span class="blue">O</span>
+      <span class="green">L</span>
+      <span class="red">L</span>
+      <span class="blue">g</span>
+      <span class="red">e</span>
+      <span class="green">l</span>
+
     </div>
 
+
     <div class="results-search-wrap">
+
       <form id="resultForm" class="search-form">
+
         <div class="search-box results-search-box">
+
           <div class="search-icon"></div>
-          <input id="resultQuery" class="search-input" autocomplete="off" aria-label="Search TROOLLgel">
-          <button class="search-submit" type="submit">Search</button>
+
+          <input
+            id="resultQuery"
+            class="search-input"
+            type="text"
+            autocomplete="off"
+            aria-label="Search"
+          />
+
+          <button
+            class="search-submit"
+            type="submit"
+          >
+            Search
+          </button>
+
         </div>
+
       </form>
+
     </div>
 
   </header>
 
+
+
   <div class="tabs-wrap">
+
     <nav class="tabs">
-      <div class="tab active">All</div>
-      <div class="tab">Images</div>
-      <div class="tab">News</div>
-      <div class="tab">Maps</div>
-      <div class="tab">More</div>
+
+      <div class="tab active">
+        All
+      </div>
+
+      <div class="tab">
+        Images
+      </div>
+
+      <div class="tab">
+        News
+      </div>
+
+      <div class="tab">
+        Maps
+      </div>
+
+      <div class="tab">
+        More
+      </div>
+
     </nav>
+
   </div>
+
+
 
   <section class="results-content">
 
     <div id="count"></div>
+
     <div id="search-note"></div>
+
     <div id="list"></div>
 
     <div class="again-wrap">
-      <button id="again" class="again">New search</button>
+
+      <button
+        id="again"
+        class="again"
+      >
+        New search
+      </button>
+
     </div>
 
   </section>
 
 </main>
 
+
+
 <script>
-const home=document.getElementById("home");
-const results=document.getElementById("results");
-const list=document.getElementById("list");
-
-const homeQuery=document.getElementById("homeQuery");
-const resultQuery=document.getElementById("resultQuery");
-
-const count=document.getElementById("count");
-const note=document.getElementById("search-note");
 
 
-function esc(v){
-  return String(v??"").replace(/[&<>"']/g,c=>({
-    "&":"&amp;",
-    "<":"&lt;",
-    ">":"&gt;",
-    '"':"&quot;",
-    "'":"&#39;"
-  }[c]));
+const home =
+  document.getElementById("home");
+
+const results =
+  document.getElementById("results");
+
+const list =
+  document.getElementById("list");
+
+const homeQuery =
+  document.getElementById("homeQuery");
+
+const resultQuery =
+  document.getElementById("resultQuery");
+
+const count =
+  document.getElementById("count");
+
+const note =
+  document.getElementById("search-note");
+
+
+/* =========================
+   HTML ESCAPING
+========================= */
+
+function esc(value){
+
+  return String(
+    value ?? ""
+  ).replace(
+    /[&<>"']/g,
+    function(c){
+
+      return {
+        "&":"&amp;",
+        "<":"&lt;",
+        ">":"&gt;",
+        '"':"&quot;",
+        "'":"&#39;"
+      }[c];
+
+    }
+  );
+
 }
 
 
-function short(v,max=300){
-  const t=String(v??"").replace(/\s+/g," ").trim();
-  return t.length<=max?t:t.slice(0,max).trim()+"…";
+/* =========================
+   SHORT SNIPPET
+========================= */
+
+function short(
+  value,
+  max=300
+){
+
+  const text =
+    String(value ?? "")
+      .replace(/\s+/g," ")
+      .trim();
+
+  return text.length <= max
+    ? text
+    : text.slice(0,max).trim()+"…";
+
 }
 
+
+/* =========================
+   SOURCE HTML
+========================= */
 
 function sourceHtml(items){
 
-  return items.map(x=>`
-    <article class="result">
+  return items.map(
+    function(x){
 
-      <div class="url">
-        ${esc(x.url)}
-      </div>
+      return `
 
-      <div class="title">
-        <a
-          href="${esc(x.url)}"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          ${esc(x.title)}
-        </a>
-      </div>
+        <article class="result">
 
-      <div class="snippet">
-        ${esc(short(x.snippet))}
-      </div>
+          <div class="url">
+            ${esc(x.url)}
+          </div>
 
-    </article>
-  `).join("");
+          <div class="title">
+
+            <a
+              href="${esc(x.url)}"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              ${esc(x.title)}
+            </a>
+
+          </div>
+
+          <div class="snippet">
+            ${esc(short(x.snippet))}
+          </div>
+
+        </article>
+
+      `;
+
+    }
+  ).join("");
 
 }
 
 
-async function share(answer,query){
+/* =========================
+   SHARE
+========================= */
 
-  const text=`TROOLLgel\n\n${query}\n\n${answer}`;
+async function share(
+  answer,
+  query
+){
+
+  const text =
+    `TROOLLgel\n\n${query}\n\n${answer}`;
 
   try{
 
-    if(navigator.share){
+    if(
+      navigator.share
+    ){
+
       await navigator.share({
         title:"TROOLLgel",
         text
@@ -163,48 +823,123 @@ async function share(answer,query){
       return;
     }
 
-    await navigator.clipboard.writeText(text);
 
-    const button=document.getElementById("shareAnswer");
+    await navigator.clipboard.writeText(
+      text
+    );
+
+
+    const button =
+      document.getElementById(
+        "shareAnswer"
+      );
+
 
     if(button){
-      button.textContent="Copied";
 
-      setTimeout(()=>{
-        button.textContent="Share this answer";
-      },1500);
+      button.textContent =
+        "Copied";
+
+      setTimeout(
+        function(){
+
+          button.textContent =
+            "Share this answer";
+
+        },
+        1500
+      );
+
     }
 
-  }catch(e){}
+  }catch(error){
+
+    /* User cancelled sharing. */
+
+  }
 
 }
 
 
+/* =========================
+   RENDER
+========================= */
+
 function render(data){
 
-  if(!data || typeof data!=="object"){
-    throw new Error("Invalid response from server.");
+  if(
+    !data ||
+    typeof data !== "object"
+  ){
+
+    throw new Error(
+      "Invalid response from server."
+    );
+
   }
 
-  const items=Array.isArray(data.results)
-    ? data.results
-    : [];
 
-  count.textContent=
-    "About "+(data.count||"a suspicious number")+" results";
+  const items =
+    Array.isArray(data.results)
+      ? data.results
+      : [];
 
+
+  count.textContent =
+    "About " +
+    (
+      data.count ||
+      "a suspicious number"
+    ) +
+    " results";
+
+
+  /* =========================
+     AI ANSWER
+  ========================= */
 
   if(
-    data.mode==="answer" &&
-    typeof data.answer==="string" &&
+    data.mode === "answer" &&
+    typeof data.answer === "string" &&
     data.answer.trim()
   ){
 
-    note.textContent=
+    note.textContent =
       "TROOLLgel found something that looks like an answer. It may still be wrong.";
 
 
-    list.innerHTML=`
+    /*
+     * IMPORTANT:
+     *
+     * Sources are shown ONLY when
+     * the backend explicitly says:
+     *
+     * showSources === true
+     *
+     * Otherwise the answer stands alone.
+     */
+
+    const showSources =
+      data.showSources === true;
+
+
+    const sourcesHtml =
+      showSources && items.length
+        ? `
+
+          <div class="sources-title">
+            Sources
+          </div>
+
+          ${sourceHtml(
+            items.slice(0,4)
+          )}
+
+        `
+        : "";
+
+
+    list.innerHTML = `
 
       <article class="answer-box">
 
@@ -217,122 +952,207 @@ function render(data){
         </div>
 
         <div class="answer-actions">
-          <button id="shareAnswer" class="share-button">
+
+          <button
+            id="shareAnswer"
+            class="share-button"
+          >
             Share this answer
           </button>
+
         </div>
 
       </article>
 
-      ${
-        items.length
-        ? `
-          <div class="sources-title">
-            Sources
-          </div>
-
-          ${sourceHtml(items.slice(0,4))}
-        `
-        : ""
-      }
+      ${sourcesHtml}
 
     `;
 
 
-    document.getElementById("shareAnswer").onclick=
-      ()=>share(data.answer,resultQuery.value);
+    const shareButton =
+      document.getElementById(
+        "shareAnswer"
+      );
+
+
+    if(shareButton){
+
+      shareButton.onclick =
+        function(){
+
+          share(
+            data.answer,
+            resultQuery.value
+          );
+
+        };
+
+    }
+
 
     return;
+
   }
 
 
-  note.textContent=
+  /* =========================
+     NORMAL SEARCH RESULTS
+  ========================= */
+
+  note.textContent =
     "Results are generated by TROOLLgel and may be slightly less reliable than usual.";
 
 
-  list.innerHTML=
+  list.innerHTML =
     items.length
-    ? sourceHtml(items)
-    : `<div class="error">
-        TROOLLgel found absolutely nothing. Impressive.
-      </div>`;
+      ? sourceHtml(items)
+      : `
+          <div class="error">
+            TROOLLgel found absolutely nothing. Impressive.
+          </div>
+        `;
 
 }
 
 
+/* =========================
+   SEARCH
+========================= */
+
 async function search(query){
 
-  const q=String(query||"").trim();
-
-  if(!q) return;
-
-
-  home.style.display="none";
-  results.style.display="block";
-
-  resultQuery.value=q;
+  const q =
+    String(query || "").trim();
 
 
-  list.innerHTML=
-    '<div class="loading">Searching the internet<span class="dots"></span></div>';
+  if(!q){
 
-  count.textContent="";
-  note.textContent="";
+    return;
 
-  window.scrollTo(0,0);
+  }
+
+
+  home.style.display =
+    "none";
+
+  results.style.display =
+    "block";
+
+  resultQuery.value =
+    q;
+
+
+  list.innerHTML = `
+    <div class="loading">
+      Searching the internet<span class="dots"></span>
+    </div>
+  `;
+
+
+  count.textContent =
+    "";
+
+  note.textContent =
+    "";
+
+
+  window.scrollTo(
+    0,
+    0
+  );
 
 
   try{
 
-    const response=await fetch("/api/search",{
-      method:"POST",
-      headers:{
-        "Content-Type":"application/json",
-        "Accept":"application/json"
-      },
-      body:JSON.stringify({
-        query:q
-      })
-    });
+    const response =
+      await fetch(
+        "/api/search",
+        {
+          method:"POST",
+
+          headers:{
+            "Content-Type":
+              "application/json",
+
+            "Accept":
+              "application/json"
+          },
+
+          body:JSON.stringify({
+            query:q
+          })
+
+        }
+      );
 
 
-    const raw=await response.text();
+    const raw =
+      await response.text();
+
 
     let data;
 
+
     try{
-      data=JSON.parse(raw);
-    }catch{
+
+      data =
+        JSON.parse(raw);
+
+    }catch(jsonError){
+
+      console.error(
+        "Server returned non-JSON response:",
+        raw
+      );
+
       throw new Error(
         raw ||
         "The server returned an invalid response."
       );
+
     }
 
 
     if(!response.ok){
+
       throw new Error(
         data.error ||
         data.message ||
         "Search failed."
       );
+
     }
 
 
     render(data);
 
 
-  }catch(e){
+  }catch(error){
 
-    console.error(e);
+    console.error(
+      "TROOLLgel search error:",
+      error
+    );
 
-    count.textContent="";
-    note.textContent="";
 
-    list.innerHTML=`
+    count.textContent =
+      "";
+
+    note.textContent =
+      "";
+
+
+    list.innerHTML = `
+
       <div class="error">
-        ${esc(e.message||"TROOLLgel tripped over its own wires.")}
+
+        ${esc(
+          error.message ||
+          "TROOLLgel tripped over its own wires."
+        )}
+
       </div>
+
     `;
 
   }
@@ -340,47 +1160,116 @@ async function search(query){
 }
 
 
-document.getElementById("homeForm").onsubmit=e=>{
-  e.preventDefault();
-  search(homeQuery.value);
-};
+/* =========================
+   HOME SEARCH
+========================= */
+
+document
+  .getElementById("homeForm")
+  .addEventListener(
+    "submit",
+    function(e){
+
+      e.preventDefault();
+
+      search(
+        homeQuery.value
+      );
+
+    }
+  );
 
 
-document.getElementById("resultForm").onsubmit=e=>{
-  e.preventDefault();
-  search(resultQuery.value);
-};
+/* =========================
+   RESULTS SEARCH
+========================= */
+
+document
+  .getElementById("resultForm")
+  .addEventListener(
+    "submit",
+    function(e){
+
+      e.preventDefault();
+
+      search(
+        resultQuery.value
+      );
+
+    }
+  );
 
 
-document.getElementById("logoBack").onclick=()=>{
+/* =========================
+   BACK TO HOME
+========================= */
 
-  results.style.display="none";
-  home.style.display="flex";
+document
+  .getElementById("logoBack")
+  .addEventListener(
+    "click",
+    function(){
 
-  homeQuery.focus();
+      results.style.display =
+        "none";
 
-  window.scrollTo(0,0);
+      home.style.display =
+        "flex";
 
-};
+      homeQuery.focus();
 
+      window.scrollTo(
+        0,
+        0
+      );
 
-document.getElementById("again").onclick=()=>{
-
-  results.style.display="none";
-  home.style.display="flex";
-
-  homeQuery.value="";
-
-  homeQuery.focus();
-
-  window.scrollTo(0,0);
-
-};
+    }
+  );
 
 
-window.addEventListener("load",()=>{
-  homeQuery.focus();
-});
+/* =========================
+   NEW SEARCH
+========================= */
+
+document
+  .getElementById("again")
+  .addEventListener(
+    "click",
+    function(){
+
+      results.style.display =
+        "none";
+
+      home.style.display =
+        "flex";
+
+      homeQuery.value =
+        "";
+
+      homeQuery.focus();
+
+      window.scrollTo(
+        0,
+        0
+      );
+
+    }
+  );
+
+
+/* =========================
+   START
+========================= */
+
+window.addEventListener(
+  "load",
+  function(){
+
+    homeQuery.focus();
+
+  }
+);
+
 </script>
 
 </body>
