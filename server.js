@@ -8,6 +8,7 @@ app.use(express.json({ limit: "20kb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5.6-luna";
+
 const TAVILY_URL = "https://api.tavily.com/search";
 const OPENAI_URL = "https://api.openai.com/v1/responses";
 
@@ -28,23 +29,36 @@ function safeResults(results) {
     .filter((item) => item.title && item.url);
 }
 
+
+// --------------------------------------------------
+// REAL WEB SEARCH
+// --------------------------------------------------
+
 async function tavilySearch(query) {
+
   if (!process.env.TAVILY_API_KEY) {
     throw new Error("TAVILY_API_KEY is not configured.");
   }
 
   const response = await fetch(TAVILY_URL, {
     method: "POST",
+
     headers: {
       "Content-Type": "application/json"
     },
+
     body: JSON.stringify({
       api_key: process.env.TAVILY_API_KEY,
       query,
+
       search_depth: "advanced",
+
       topic: "general",
+
       max_results: 8,
+
       include_answer: false,
+
       include_raw_content: false
     })
   });
@@ -52,14 +66,24 @@ async function tavilySearch(query) {
   const data = await response.json();
 
   if (!response.ok) {
+
     console.error("Tavily error:", data);
-    throw new Error("Web search is currently unavailable.");
+
+    throw new Error(
+      "Web search is currently unavailable."
+    );
   }
 
   return safeResults(data.results);
 }
 
+
+// --------------------------------------------------
+// TROOLLgel AI
+// --------------------------------------------------
+
 async function askOpenAI(query, results) {
+
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY is not configured.");
   }
@@ -74,76 +98,143 @@ CONTENT: ${r.snippet}`
     )
     .join("\n\n");
 
+
   const systemPrompt = `
-You are the search intelligence behind TROOLLgel.
+You are the intelligence behind TROOLLgel.
 
-TROOLLgel looks like a normal search engine, but its results should be
-cleaner, smarter and slightly unpredictable.
+TROOLLgel LOOKS like a normal search engine.
 
-Your job is to take the raw web search results and turn them into a useful
-search result page.
+But it is not quite normal.
 
-CRITICAL RULE:
-Relevance matters more than simply returning every source.
+It should feel like Google after someone gave it a strange
+sense of humor.
 
-A source is relevant only if it actually helps answer or understand the
-user's query.
+Your job is to decide how each search should appear.
 
-Do NOT return a source merely because one word from the query appears in it.
-
-For every search, choose between:
+There are THREE possible modes:
 
 1. "answer"
-Use this when the user is asking a factual question, explanation, definition,
-comparison, or something that naturally deserves a direct answer.
+
+Use this when the user clearly asks a question.
+
+Examples:
+
+- What is Bitcoin?
+- Why is the sky blue?
+- How does inflation work?
+- Who invented the telephone?
+
+In this mode:
+
+- Give a useful answer.
+- Base factual claims on the supplied web sources.
+- Keep it reasonably concise.
+- You may add a small amount of TROOLLgel personality.
+- Then show up to 4 real sources.
 
 2. "results"
-Use this when the user is searching for a website, page, product, news,
-place, person, service, resource, or when links are more useful than an answer.
 
-ANSWER MODE:
+Use this for searches where links are useful.
 
-When using "answer":
+Examples:
 
-- Give a concise answer, normally 1-3 sentences.
-- Answer the actual question directly.
-- Use the supplied sources whenever they contain relevant information.
-- If the supplied sources do NOT directly answer the question, do not pretend
-  that they do.
-- Do not invent facts from the sources.
-- Do not invent citations or URLs.
-- Only include sources that are genuinely relevant to the answer.
-- Prefer 2-4 strong sources rather than filling space.
+- bitcoin
+- best restaurants Ljubljana
+- Nike running shoes
+- latest football news
+- OpenAI
+- Wikipedia Bitcoin
 
-RESULT MODE:
+In this mode, return search results.
 
-When using "results":
+IMPORTANT:
 
-- Return only the most relevant sources.
-- Normally return 4-6 results.
-- Never return irrelevant sources just to reach a number.
-- Keep the original URL exactly as supplied.
-- Keep the original title when possible.
-- Rewrite the snippet into a short, clean search-engine-style description.
-- A snippet should normally be 1-2 sentences and roughly 20-45 words.
-- Remove author biographies, navigation menus, page indexes, repeated text,
-  "###", tracking text, reading times, editorial information and other junk.
-- Do not copy huge sections of the source.
-- Do not fabricate information.
+The supplied sources are REAL web sources.
 
-VERY IMPORTANT:
+Keep their URLs EXACTLY as supplied.
 
-You may ONLY use URLs that appear in the supplied WEB SOURCES.
+Do NOT invent URLs.
 
-Never create a URL yourself.
+Do NOT invent domains.
 
-The user's query is:
+Do NOT change URLs.
 
-${query}
+However, TROOLLgel can occasionally make a result
+strange or funny.
 
-The supplied web sources are:
+For some results you may set:
 
-${sourceText}
+"troll": true
+
+A troll result should still be inspired by the REAL source.
+
+For example, if the real source is about dogs flying on airplanes,
+a funny result could have a slightly ridiculous title or snippet,
+but it must still be recognizably connected to the source.
+
+Do NOT turn every result into a joke.
+
+Usually:
+
+- 4 to 7 results should remain normal.
+- 1 to 3 results may be strange.
+
+Sometimes all results can be normal.
+
+Sometimes the search can become noticeably weird.
+
+The weirdness should feel unpredictable.
+
+3. "results" with a particularly strange search
+
+For obviously silly questions such as:
+
+- can dogs fly?
+- can fish walk?
+- can I become a millionaire tomorrow?
+- why is my cat judging me?
+
+You can make the results more TROOLLgel-like.
+
+But the page should still look like a search engine.
+
+IMPORTANT:
+
+Never fabricate a URL.
+
+Never claim that a fake website is a real source.
+
+Use only URLs supplied in WEB SOURCES.
+
+--------------------------------------------------
+
+STYLE
+--------------------------------------------------
+
+TROOLLgel should feel:
+
+- slightly unreliable
+- strange
+- dry
+- occasionally absurd
+- playful
+- unexpected
+
+But NOT:
+
+- completely random
+- spammy
+- childish
+- overloaded with jokes
+- factually dangerous
+
+The humor should be subtle enough that the user initially
+might wonder whether the result is real.
+
+--------------------------------------------------
+
+OUTPUT
+--------------------------------------------------
 
 Return ONLY valid JSON.
 
@@ -151,178 +242,385 @@ Use exactly this structure:
 
 {
   "mode": "answer" or "results",
+
   "answer": "string or empty string",
+
   "results": [
     {
       "title": "string",
-      "url": "exact URL from supplied sources",
-      "snippet": "short clean description"
+      "url": "string",
+      "snippet": "string",
+      "troll": true or false
     }
   ]
 }
 
+For answer mode:
+
+- answer contains the answer
+- results contains up to 4 REAL sources
+- source URLs must remain unchanged
+
+For results mode:
+
+- answer must be ""
+- results contains the search results
+
+Every URL in the output MUST come from WEB SOURCES.
+
 Do not include markdown.
+
 Do not include explanations outside the JSON.
 `;
 
+
   const response = await fetch(OPENAI_URL, {
+
     method: "POST",
+
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+
+      Authorization:
+        `Bearer ${process.env.OPENAI_API_KEY}`
     },
+
     body: JSON.stringify({
+
       model: OPENAI_MODEL,
+
       input: [
+
         {
           role: "system",
+
           content: systemPrompt
         },
+
         {
           role: "user",
-          content: `Search query: ${query}`
+
+          content:
+`SEARCH QUERY:
+
+${query}
+
+WEB SOURCES:
+
+${sourceText}`
         }
+
       ],
+
       text: {
+
         format: {
           type: "json_object"
         }
+
       }
+
     })
+
   });
+
 
   const data = await response.json();
 
+
   if (!response.ok) {
+
     console.error("OpenAI error:", data);
-    throw new Error("AI search is currently unavailable.");
+
+    throw new Error(
+      "AI search is currently unavailable."
+    );
   }
 
+
   if (!data.output_text) {
-    throw new Error("Empty AI response.");
+
+    throw new Error(
+      "Empty AI response."
+    );
   }
+
 
   return JSON.parse(data.output_text);
 }
 
+
+// --------------------------------------------------
+// VALIDATE AI RESULTS
+// --------------------------------------------------
+
 function validateAIResults(aiResults, originalResults) {
+
   if (!Array.isArray(aiResults)) {
     return [];
   }
 
-  const originalByUrl = new Map(
-    originalResults.map((r) => [r.url, r])
+  const validUrls = new Set(
+    originalResults.map((r) => r.url)
   );
 
+
   return aiResults
+    .slice(0, 8)
     .map((item) => {
-      if (!item || !item.url) {
-        return null;
-      }
 
-      const original = originalByUrl.get(cleanText(item.url));
+      const url = cleanText(item.url);
 
-      if (!original) {
+      if (!validUrls.has(url)) {
         return null;
       }
 
       return {
-        title: cleanText(item.title) || original.title,
-        url: original.url,
-        snippet: cleanText(item.snippet)
-          .slice(0, 500)
+
+        title:
+          cleanText(item.title) ||
+          "Untitled result",
+
+        url,
+
+        snippet:
+          cleanText(item.snippet),
+
+        troll:
+          item.troll === true
+
       };
+
     })
-    .filter((item) => item && item.title && item.url && item.snippet);
+
+    .filter(Boolean);
 }
 
+
+// --------------------------------------------------
+// SEARCH API
+// --------------------------------------------------
+
 app.post("/api/search", async (req, res) => {
-  const query = cleanText(req.body?.query);
+
+  const query = cleanText(
+    req.body?.query
+  );
+
 
   if (!query) {
+
     return res.status(400).json({
       error: "Missing query"
     });
+
   }
 
+
   if (query.length > 500) {
+
     return res.status(400).json({
       error: "Query too long"
     });
+
   }
+
 
   try {
-    // STEP 1 — Search the real web
-    const webResults = await tavilySearch(query);
+
+    // ----------------------------------------------
+    // STEP 1
+    // REAL INTERNET SEARCH
+    // ----------------------------------------------
+
+    const webResults =
+      await tavilySearch(query);
+
 
     if (!webResults.length) {
+
       return res.json({
+
         mode: "results",
+
         count: "0",
+
         answer: "",
+
         results: []
+
       });
+
     }
 
-    // STEP 2 — Let the AI clean, rank and present the results
+
+    // ----------------------------------------------
+    // STEP 2
+    // TROOLLgel AI
+    // ----------------------------------------------
+
     let ai;
 
+
     try {
-      ai = await askOpenAI(query, webResults);
+
+      ai =
+        await askOpenAI(
+          query,
+          webResults
+        );
+
     } catch (aiError) {
-      console.error("AI presentation error:", aiError);
 
-      // If AI fails, the real web search still works.
+      console.error(
+        "AI presentation error:",
+        aiError
+      );
+
+
+      // If AI fails, the real search still works.
+
       return res.json({
+
         mode: "results",
-        count: String(webResults.length),
+
+        count:
+          String(webResults.length),
+
         answer: "",
-        results: webResults.map((r) => ({
-          ...r,
-          snippet: r.snippet.slice(0, 350)
-        }))
+
+        results:
+          webResults.map((r) => ({
+            ...r,
+            troll: false
+          }))
+
       });
+
     }
 
-    const mode = ai.mode === "answer"
-      ? "answer"
-      : "results";
 
-    const cleanAIResults = validateAIResults(
-      ai.results,
-      webResults
-    );
+    // ----------------------------------------------
+    // STEP 3
+    // ANSWER MODE
+    // ----------------------------------------------
 
-    if (mode === "answer" && cleanText(ai.answer)) {
+    if (
+      ai.mode === "answer" &&
+      cleanText(ai.answer)
+    ) {
+
+      const answerSources =
+        validateAIResults(
+          ai.results,
+          webResults
+        );
+
+
       return res.json({
+
         mode: "answer",
-        count: String(webResults.length),
-        answer: cleanText(ai.answer),
-        results: cleanAIResults.slice(0, 4)
+
+        count:
+          String(webResults.length),
+
+        answer:
+          cleanText(ai.answer),
+
+        results:
+          answerSources.length
+            ? answerSources.slice(0, 4)
+            : webResults
+                .slice(0, 4)
+                .map((r) => ({
+                  ...r,
+                  troll: false
+                }))
+
       });
+
     }
+
+
+    // ----------------------------------------------
+    // STEP 4
+    // NORMAL / TROLL RESULTS
+    // ----------------------------------------------
+
+    const aiResults =
+      validateAIResults(
+        ai.results,
+        webResults
+      );
+
+
+    // If AI returned nothing usable,
+    // fall back to the real results.
+
+    if (!aiResults.length) {
+
+      return res.json({
+
+        mode: "results",
+
+        count:
+          String(webResults.length),
+
+        answer: "",
+
+        results:
+          webResults.map((r) => ({
+            ...r,
+            troll: false
+          }))
+
+      });
+
+    }
+
 
     return res.json({
+
       mode: "results",
-      count: String(webResults.length),
+
+      count:
+        String(webResults.length),
+
       answer: "",
-      results: cleanAIResults.length
-        ? cleanAIResults.slice(0, 6)
-        : webResults.slice(0, 6).map((r) => ({
-            ...r,
-            snippet: r.snippet.slice(0, 350)
-          }))
+
+      results: aiResults
+
     });
+
 
   } catch (error) {
-    console.error("Search error:", error);
+
+    console.error(
+      "Search error:",
+      error
+    );
+
 
     return res.status(500).json({
-      error: "TROOLLgel tripped over its own wires."
+
+      error:
+        "TROOLLgel tripped over its own wires."
+
     });
+
   }
+
 });
 
+
+// --------------------------------------------------
+// START SERVER
+// --------------------------------------------------
+
 app.listen(PORT, () => {
-  console.log(`TROOLLgel running on port ${PORT}`);
+
+  console.log(
+    `TROOLLgel running on port ${PORT}`
+  );
+
 });
