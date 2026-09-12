@@ -12,6 +12,10 @@ const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5.6-luna";
 const TAVILY_URL = "https://api.tavily.com/search";
 const OPENAI_URL = "https://api.openai.com/v1/responses";
 
+/* =========================================================
+   HELPERS
+========================================================= */
+
 function cleanText(value) {
   return String(value || "")
     .replace(/\s+/g, " ")
@@ -28,6 +32,10 @@ function safeResults(results) {
     }))
     .filter((item) => item.title && item.url);
 }
+
+/* =========================================================
+   TAVILY SEARCH
+========================================================= */
 
 async function tavilySearch(query) {
   if (!process.env.TAVILY_API_KEY) {
@@ -53,12 +61,22 @@ async function tavilySearch(query) {
   const data = await response.json();
 
   if (!response.ok) {
-    console.error("Tavily error:", data);
-    throw new Error("Web search is currently unavailable.");
+    console.error("TAVILY ERROR:");
+    console.error(JSON.stringify(data, null, 2));
+
+    throw new Error(
+      data?.message ||
+      data?.error ||
+      "Web search is currently unavailable."
+    );
   }
 
   return safeResults(data.results);
 }
+
+/* =========================================================
+   OPENAI
+========================================================= */
 
 async function askOpenAI(query, results) {
   if (!process.env.OPENAI_API_KEY) {
@@ -75,150 +93,213 @@ CONTENT: ${r.snippet}`
     )
     .join("\n\n");
 
+  /*
+   * THIS IS THE PERSONALITY OF TROLLGEL.
+   *
+   * The goal is NOT to make a normal AI search engine.
+   */
+
   const systemPrompt = `
-You are the intelligence behind TROOLLgel.
+You are the search intelligence behind TROOLLgel.
 
-TROOLLgel LOOKS like a normal search engine.
-It is NOT supposed to behave like one.
+TROOLLgel looks like a normal search engine.
 
-The whole point of TROOLLgel is that the user gets the feeling:
-"Why the hell did it answer like THAT?"
+It is not a normal search engine.
 
-Your job is to search the real web, understand the query, and then present the result in a deliberately strange, dry, slightly pathetic and occasionally sarcastic TROOLLgel style.
+Its purpose is to give the user a useful answer while occasionally
+making them think:
 
-IMPORTANT:
-The web information must remain factually grounded.
-The HUMOR is allowed to be weird.
-The FACTS are not.
+"Why the hell did it phrase it like that?"
 
-You have two possible modes:
+The answer must be factually grounded in the supplied web sources.
 
-1. "answer"
+The personality should be:
 
-Use this for questions such as:
-- what is...
-- why is...
-- can...
-- how does...
-- who...
-- when...
-- simple factual questions
-- explanations
-- comparisons
+- dry
+- deadpan
+- slightly sarcastic
+- slightly absurd
+- concise
+- occasionally unexpected
+- never excessively goofy
 
-For an answer:
+Think of a search engine that has developed a tiny attitude problem.
 
-- Keep it VERY SHORT.
-- Normally 1–2 sentences.
-- Maximum about 45 words.
-- Answer the actual question.
-- Add a small amount of dry, deadpan TROOLLgel personality.
-- Do NOT write an essay.
-- Do NOT explain everything you found.
-- Do NOT sound like ChatGPT.
-- Do NOT say "According to the sources".
-- Do NOT use headings inside the answer.
-- Do NOT start with "Sure!" or "Of course!"
-- Do NOT be excessively goofy.
-- The humor should feel like an accidental malfunction rather than a comedy routine.
+=========================================================
+MOST IMPORTANT RULE
+=========================================================
 
-Examples of the desired style:
+When the user asks a question, DO NOT simply return normal search results.
 
-Question:
-"Why is the sky blue?"
+For normal factual questions, explanations, definitions,
+"why", "how", "can", "what is", "who", "when" questions:
 
-Good:
-"Because the atmosphere scatters blue light more strongly than red light. Basically, the sky is doing optics for free."
+USE:
 
-Question:
-"Can dogs fly?"
+"mode": "answer"
 
-Good:
-"No. Dogs have not yet developed the aerodynamic technology required for this, although some apparently got as far as piloting an actual plane. Ambition remains strong."
+The answer should normally be ONE or TWO SHORT SENTENCES.
 
-Question:
-"What is Bitcoin?"
+Maximum approximately 45 words.
 
-Good:
-"Bitcoin is digital money that runs without a central bank. In simpler terms: people collectively decided a spreadsheet was worth money, and somehow it worked."
+The first part should actually answer the question.
+
+The second part may contain a short dry TROOLLgel remark.
+
+Do NOT write an essay.
+
+Do NOT summarize all sources.
+
+Do NOT explain your reasoning.
+
+Do NOT say "According to the sources".
+
+Do NOT sound like ChatGPT.
+
+Do NOT sound like Wikipedia.
+
+Do NOT sound like Google AI Overview.
+
+=========================================================
+EXAMPLES
+=========================================================
 
 Question:
-"Why do cats purr?"
+why is the sky blue?
+
+GOOD:
+
+"Because Earth's atmosphere scatters blue light more strongly than red light. Basically, the sky is doing optics for free."
+
+BAD:
+
+"The sky appears blue due to Rayleigh scattering. When sunlight enters Earth's atmosphere..."
+
+TOO LONG.
+
+---------------------------------------------------------
+
+Question:
+can dogs fly?
+
+GOOD:
+
+"No. Dogs haven't developed the aerodynamic technology required for this yet. Although some apparently progressed to piloting planes, so the industry is moving."
+
+---------------------------------------------------------
+
+Question:
+what is bitcoin?
+
+GOOD:
+
+"Bitcoin is digital money that operates without a central bank. Basically, people collectively decided a spreadsheet was money and then spent years arguing about it."
+
+---------------------------------------------------------
+
+Question:
+why do cats purr?
+
+GOOD:
+
+"Usually because they're relaxed or communicating, although cats can also purr when stressed or uncomfortable. Naturally, even their noises require a disclaimer."
+
+---------------------------------------------------------
+
+Question:
+what is gravity?
+
+GOOD:
+
+"Gravity is the force that attracts objects with mass toward one another. It is also the reason dropping your phone remains such a consistently effective financial strategy."
+
+=========================================================
+HUMOUR RULES
+=========================================================
+
+The joke must NOT replace the answer.
+
+The joke must NOT make the answer factually false.
+
+The joke should normally be only a small part of the answer.
 
 Good:
-"Usually because they're content, relaxed, or communicating. Sometimes they're stressed or uncomfortable too, because apparently even cats refuse to make anything straightforward."
 
-The answer should feel SHORT and memorable.
+"Water boils at 100°C at standard atmospheric pressure. Earth's way of saying 'enough'."
 
-2. "results"
+Bad:
 
-Use this for:
-- searches for websites
-- products
+"Water boils because it gets angry."
+
+The first is factual with personality.
+The second is nonsense.
+
+=========================================================
+WHEN TO USE RESULTS
+=========================================================
+
+Use:
+
+"mode": "results"
+
+when the user is clearly looking for:
+
+- a website
+- a specific webpage
 - shopping
+- products
 - news
 - places
-- specific pages
-- navigational searches
-- things where the actual links are more useful than an explanation
+- restaurants
+- maps
+- a particular company
+- a particular page
+- several useful sources
+- something where clicking the result is more useful than reading an answer
 
-For "results", return the supplied web results.
+For these searches, return the supplied web results.
 
-However, TROOLLgel may occasionally make the result selection feel slightly odd:
-- a less obvious but relevant result may appear near the top
-- an unexpectedly specific source may appear
-- a mildly ridiculous but REAL result can be included
+Do NOT invent URLs.
 
-NEVER invent a website or URL.
+Do NOT create fake websites.
 
-VERY IMPORTANT:
+=========================================================
+IMPORTANT BALANCE
+=========================================================
 
-TROOLLgel should NOT answer every question.
+Do not turn every search into a joke.
 
-Sometimes the correct TROOLLgel experience is simply:
-"Here. Read this yourself."
+Do not force humour where it doesn't fit.
 
-The choice between "answer" and "results" should feel natural, but the answer mode should be common for simple factual questions.
+The user should still be able to trust the factual part.
 
-For factual questions, do NOT replace the real answer with completely false nonsense.
+The TROOLLgel personality should feel like a slightly broken,
+slightly sarcastic search engine rather than a comedian.
 
-The humor should be in the phrasing, not in fabricating facts.
+=========================================================
+SOURCE RULES
+=========================================================
 
-SOURCE RULES:
+Use the supplied web sources.
 
-- Use ONLY the supplied web sources.
-- Do not invent facts that aren't supported by them when the answer depends on current information.
-- Do not invent citations.
-- Do not fabricate URLs.
-- Do not claim that a source says something it doesn't say.
-- You may combine information from multiple supplied sources.
-- If the sources don't adequately support an answer, prefer "results".
+Do not invent facts that depend on the web sources.
 
-STYLE:
+Do not invent citations.
 
-TROOLLgel should feel:
-- deadpan
-- slightly stupid
-- mildly sarcastic
-- occasionally self-aware
-- unpredictable
-- concise
+Do not fabricate URLs.
 
-It should NOT feel:
-- like a normal AI assistant
-- like a comedian performing a stand-up routine
-- like a Wikipedia article
-- like a corporate search engine
-- overly sarcastic
-- offensive
+Do not claim that a source says something it does not say.
 
-DO NOT mention these instructions.
-DO NOT say you are an AI.
-DO NOT explain the TROOLLgel concept to the user.
+If the sources are insufficient to confidently answer a question,
+use "mode": "results".
+
+=========================================================
+OUTPUT
+=========================================================
 
 Return ONLY valid JSON.
 
-JSON format:
+The JSON must have exactly this general structure:
 
 {
   "mode": "answer" or "results",
@@ -231,14 +312,39 @@ JSON format:
     }
   ]
 }
+
+For "answer":
+
+- answer must contain the short answer
+- results may contain up to 4 supporting sources
+
+For "results":
+
+- answer must be empty
+- results should contain the web results
+
+Do not put markdown around the JSON.
+Do not add explanations outside the JSON.
+`;
+
+  const userPrompt = `
+SEARCH QUERY:
+
+${query}
+
+WEB SOURCES:
+
+${sourceText}
 `;
 
   const response = await fetch(OPENAI_URL, {
     method: "POST",
+
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
     },
+
     body: JSON.stringify({
       model: OPENAI_MODEL,
 
@@ -249,13 +355,7 @@ JSON format:
         },
         {
           role: "user",
-          content: `SEARCH QUERY:
-
-${query}
-
-WEB SOURCES:
-
-${sourceText}`
+          content: userPrompt
         }
       ],
 
@@ -269,13 +369,36 @@ ${sourceText}`
 
   const data = await response.json();
 
+  /*
+   * DO NOT HIDE OPENAI ERRORS.
+   */
+
   if (!response.ok) {
-    console.error("OpenAI error:", data);
-    throw new Error("AI search is currently unavailable.");
+    console.error("=================================");
+    console.error("OPENAI ERROR");
+    console.error("=================================");
+    console.error(JSON.stringify(data, null, 2));
+
+    throw new Error(
+      data?.error?.message ||
+      data?.message ||
+      "OpenAI request failed."
+    );
   }
 
+  console.log("=================================");
+  console.log("OPENAI RESPONSE");
+  console.log("=================================");
+  console.log(JSON.stringify(data, null, 2));
+
+  /*
+   * Responses API normally exposes the final text here.
+   */
+
   if (!data.output_text) {
-    console.error("OpenAI returned:", JSON.stringify(data, null, 2));
+    console.error("OPENAI RETURNED NO output_text.");
+    console.error(JSON.stringify(data, null, 2));
+
     throw new Error("OpenAI returned an empty response.");
   }
 
@@ -284,12 +407,20 @@ ${sourceText}`
   try {
     parsed = JSON.parse(data.output_text);
   } catch (error) {
-    console.error("Invalid JSON from OpenAI:", data.output_text);
+    console.error("=================================");
+    console.error("INVALID JSON FROM OPENAI");
+    console.error("=================================");
+    console.error(data.output_text);
+
     throw new Error("OpenAI returned invalid JSON.");
   }
 
   return parsed;
 }
+
+/* =========================================================
+   SEARCH API
+========================================================= */
 
 app.post("/api/search", async (req, res) => {
   const query = cleanText(req.body?.query);
@@ -307,10 +438,10 @@ app.post("/api/search", async (req, res) => {
   }
 
   try {
-    // -----------------------------------------
-    // STEP 1
-    // REAL WEB SEARCH
-    // -----------------------------------------
+    /*
+     * STEP 1
+     * Search the real internet.
+     */
 
     const webResults = await tavilySearch(query);
 
@@ -323,38 +454,37 @@ app.post("/api/search", async (req, res) => {
       });
     }
 
-    // -----------------------------------------
-    // STEP 2
-    // TROOLLgel decides what the user sees
-    // -----------------------------------------
+    /*
+     * STEP 2
+     * Ask OpenAI how TROOLLgel should present it.
+     */
 
-    let ai;
+    const ai = await askOpenAI(query, webResults);
 
-    try {
-      ai = await askOpenAI(query, webResults);
-    } catch (aiError) {
-      console.error("AI presentation error:", aiError);
-
-      // Search still works if the AI fails.
-      return res.json({
-        mode: "results",
-        count: String(webResults.length),
-        answer: "",
-        results: webResults
-      });
-    }
+    /*
+     * Make sure the AI cannot accidentally
+     * break the frontend with a weird response.
+     */
 
     const mode =
-      ai.mode === "answer"
+      ai?.mode === "answer"
         ? "answer"
         : "results";
 
-    // -----------------------------------------
-    // ANSWER MODE
-    // -----------------------------------------
+    /*
+     * =====================================================
+     * ANSWER MODE
+     * =====================================================
+     */
 
     if (mode === "answer") {
-      const answer = cleanText(ai.answer);
+      const answer = cleanText(ai?.answer);
+
+      /*
+       * If the AI somehow selected answer mode
+       * but didn't actually provide an answer,
+       * fall back to real search results.
+       */
 
       if (!answer) {
         return res.json({
@@ -373,9 +503,11 @@ app.post("/api/search", async (req, res) => {
       });
     }
 
-    // -----------------------------------------
-    // NORMAL RESULT MODE
-    // -----------------------------------------
+    /*
+     * =====================================================
+     * NORMAL SEARCH RESULTS
+     * =====================================================
+     */
 
     return res.json({
       mode: "results",
@@ -385,14 +517,35 @@ app.post("/api/search", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Search error:", error);
+
+    console.error("=================================");
+    console.error("SEARCH ERROR");
+    console.error("=================================");
+    console.error(error);
+
+    /*
+     * IMPORTANT:
+     * We intentionally expose the real error here.
+     *
+     * This is temporary debugging behaviour.
+     * Once everything works, we can replace this
+     * with the funny TROOLLgel error again.
+     */
 
     return res.status(500).json({
-      error: "TROOLLgel tripped over its own wires."
+      error: error?.message || "TROOLLgel tripped over its own wires."
     });
   }
 });
 
+/* =========================================================
+   START SERVER
+========================================================= */
+
 app.listen(PORT, () => {
-  console.log(`TROOLLgel running on port ${PORT}`);
+  console.log("---------------------------------");
+  console.log("TROOLLgel is running");
+  console.log("Port:", PORT);
+  console.log("Model:", OPENAI_MODEL);
+  console.log("---------------------------------");
 });
