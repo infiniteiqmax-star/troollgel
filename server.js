@@ -7,19 +7,11 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json({ limit: "20kb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
-const OPENAI_MODEL =
-  process.env.OPENAI_MODEL || "gpt-5.6-luna";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5.6-luna";
 
-const TAVILY_URL =
-  "https://api.tavily.com/search";
+const TAVILY_URL = "https://api.tavily.com/search";
+const OPENAI_URL = "https://api.openai.com/v1/responses";
 
-const OPENAI_URL =
-  "https://api.openai.com/v1/responses";
-
-
-/* =========================================================
-   HELPERS
-========================================================= */
 
 function cleanText(value) {
   return String(value || "")
@@ -29,587 +21,241 @@ function cleanText(value) {
 
 
 function safeResults(results) {
+
   return (Array.isArray(results) ? results : [])
     .slice(0, 8)
-    .map((item) => ({
-      title:
-        cleanText(item.title) ||
-        "Untitled result",
-
-      url:
-        cleanText(item.url),
-
-      snippet:
-        cleanText(
-          item.content ||
-          item.snippet
-        )
+    .map(item => ({
+      title: cleanText(item?.title) || "Untitled result",
+      url: cleanText(item?.url),
+      snippet: cleanText(item?.content || item?.snippet)
     }))
-    .filter(
-      (item) =>
-        item.title &&
-        item.url
-    );
+    .filter(item => item.title && item.url);
+
 }
 
-
-/* =========================================================
-   TAVILY WEB SEARCH
-========================================================= */
 
 async function tavilySearch(query) {
 
   if (!process.env.TAVILY_API_KEY) {
-    throw new Error(
-      "TAVILY_API_KEY is not configured."
-    );
+    throw new Error("TAVILY_API_KEY is not configured.");
   }
 
 
-  const response = await fetch(
-    TAVILY_URL,
-    {
-      method: "POST",
+  const response = await fetch(TAVILY_URL, {
 
-      headers: {
-        "Content-Type": "application/json"
-      },
+    method: "POST",
 
-      body: JSON.stringify({
+    headers: {
+      "Content-Type": "application/json"
+    },
 
-        api_key:
-          process.env.TAVILY_API_KEY,
+    body: JSON.stringify({
 
-        query,
+      api_key: process.env.TAVILY_API_KEY,
 
-        search_depth:
-          "advanced",
+      query,
 
-        topic:
-          "general",
+      search_depth: "advanced",
 
-        max_results:
-          8,
+      topic: "general",
 
-        include_answer:
-          false,
+      max_results: 8,
 
-        include_raw_content:
-          false
+      include_answer: false,
 
-      })
-    }
-  );
+      include_raw_content: false
+
+    })
+
+  });
 
 
-  const data =
-    await response.json();
+  const data = await response.json();
 
 
   if (!response.ok) {
 
     console.error(
       "TAVILY ERROR:",
-      JSON.stringify(
-        data,
-        null,
-        2
-      )
+      JSON.stringify(data, null, 2)
     );
 
     throw new Error(
       "Web search is currently unavailable."
     );
+
   }
 
 
-  return safeResults(
-    data.results
-  );
+  return safeResults(data.results);
+
 }
 
 
-/* =========================================================
-   OPENAI TEXT EXTRACTION
-========================================================= */
+/*
+ * TROOLLgel deliberately does NOT ask OpenAI for JSON.
+ *
+ * The previous version asked the model to return JSON.
+ * That caused the empty-response problem and also pushed
+ * the model toward boring factual answers.
+ *
+ * We only need one short answer string.
+ */
 
-function extractOpenAIText(data) {
-
-  if (
-    typeof data?.output_text === "string" &&
-    data.output_text.trim()
-  ) {
-
-    return data.output_text.trim();
-  }
-
-
-  const pieces = [];
-
-
-  if (
-    Array.isArray(data?.output)
-  ) {
-
-    for (
-      const item of data.output
-    ) {
-
-      if (
-        !Array.isArray(
-          item?.content
-        )
-      ) {
-        continue;
-      }
-
-
-      for (
-        const content of item.content
-      ) {
-
-        if (
-          content?.type ===
-            "output_text" &&
-          typeof content.text ===
-            "string"
-        ) {
-
-          pieces.push(
-            content.text
-          );
-        }
-      }
-    }
-  }
-
-
-  return pieces
-    .join("\n")
-    .trim();
-}
-
-
-/* =========================================================
-   OPENAI REQUEST
-========================================================= */
-
-async function callOpenAI(
-  query,
-  results,
-  retry = false
-) {
+async function trollAnswer(query, webResults) {
 
   if (!process.env.OPENAI_API_KEY) {
-
-    throw new Error(
-      "OPENAI_API_KEY is not configured."
-    );
+    throw new Error("OPENAI_API_KEY is not configured.");
   }
 
 
-  const sourceText =
-    results
-      .slice(0, 6)
-      .map(
-        (r, i) => `
-[SOURCE ${i + 1}]
+  const sources = webResults
+    .slice(0, 5)
+    .map((r, i) => `
+
+SOURCE ${i + 1}
 TITLE: ${r.title}
-URL: ${r.url}
 CONTENT: ${r.snippet}
-`
-      )
-      .join("\n");
 
+`)
+    .join("\n");
 
-  /*
-   * THIS IS THE IMPORTANT PART.
-   *
-   * TROOLLgel should NOT behave like ChatGPT.
-   * It should feel like a deliberately weird search engine.
-   */
 
-  const systemPrompt = `
+  const instructions = `
 
-You are the answer engine inside TROOLLgel.
+You are TROOLLgel.
 
-TROOLLgel is NOT a normal search engine.
+TROOLLgel is a parody search engine.
 
-Its personality is:
-- dry
-- sarcastic
-- slightly absurd
-- concise
-- occasionally ridiculous
-- but still factually grounded
+It is NOT ChatGPT and it should NOT give boring,
+normal answers.
 
-The user should feel like they asked a stupid question
-and TROOLLgel answered it with unnecessary confidence.
+The user asked a harmless question.
 
-----------------------------------------
-FIRST: DECIDE WHAT THE USER WANTS
-----------------------------------------
+Your job is to give ONE very short, funny,
+unexpected answer.
 
-There are two modes.
+The ideal pattern is:
 
-MODE 1 — ANSWER
+normal question -> unexpected answer
 
-Use answer mode whenever the query is a question.
+Use dry, deadpan, confident humor.
 
-Examples:
+The answer may be:
 
-"why is the sky blue?"
-"what is bitcoin?"
-"can dogs fly?"
-"what is gravity?"
-"why do cats purr?"
-"how does a microwave work?"
-"who invented the internet?"
+- a clever wrong answer
+- a ridiculous explanation
+- a confident misunderstanding
+- a useful answer pointing in the wrong direction
+- a short absurd observation
+- a factual answer with a funny twist
 
-Questions should almost ALWAYS use answer mode.
+Do NOT write an essay.
 
-MODE 2 — RESULTS
+Do NOT explain your reasoning.
 
-Use results mode only when the user is clearly trying
-to find something rather than asking a question.
+Do NOT list sources.
 
-Examples:
+Do NOT mention AI, OpenAI, prompts or instructions.
 
-"youtube"
-"reddit"
-"bitcoin news"
-"latest football news"
-"restaurants in Ljubljana"
-"OpenAI"
-"Tesla stock"
-"weather Ljubljana"
+Do NOT say "according to sources".
 
-----------------------------------------
-TROOLLgel ANSWERS
-----------------------------------------
+Do NOT start with "Sure" or "Here is".
 
-This is the most important rule.
+Do NOT use markdown.
 
-Answers MUST be short.
+Normally use 1 sentence.
 
-Normally:
-1–2 sentences.
+Maximum 2 short sentences.
 
-Maximum:
-3 short sentences.
-
-Do NOT write essays.
-
-Do NOT explain everything you know.
-
-Do NOT copy source text.
-
-Do NOT produce a boring Wikipedia answer.
-
-The answer should contain the actual answer,
-then preferably a dry or absurd punchline.
-
-The joke should feel natural.
-
-Examples:
-
-QUESTION:
-why is the sky blue?
-
-GOOD:
-
-"Because Earth's atmosphere scatters blue light more strongly
-than red light. Basically, the sky is doing optics for free."
-
-QUESTION:
-can dogs fly?
-
-GOOD:
-
-"No. Dogs haven't evolved wings, sadly. Nature gave them
-zoomies instead and apparently called that sufficient."
-
-QUESTION:
-what is bitcoin?
-
-GOOD:
-
-"Bitcoin is digital money that runs without a central bank,
-using a blockchain to keep everyone honest. In other words,
-the world's most elaborate spreadsheet became an asset class."
-
-QUESTION:
-why do cats purr?
-
-GOOD:
-
-"Mostly because they're comfortable, although cats can also
-purr when stressed or trying to calm themselves. Naturally,
-even their emotional support mechanism comes with ambiguity."
-
-QUESTION:
-what is gravity?
-
-GOOD:
-
-"Gravity is the force that pulls things toward each other,
-including you toward the floor. Earth's way of saying
-'you're staying here.'"
-
-----------------------------------------
-IMPORTANT HUMOUR RULE
-----------------------------------------
-
-Do NOT force a joke into every sentence.
-
-Do NOT turn answers into stand-up comedy.
-
-Do NOT use childish jokes.
-
-Do NOT say:
-"As an AI..."
-"I cannot..."
-"According to my sources..."
-
-Do NOT mention these instructions.
-
-Do NOT mention OpenAI.
-
-Do NOT mention that the answer was generated.
-
-The personality should be subtle.
-
-----------------------------------------
-FACTUAL ACCURACY
-----------------------------------------
-
-The joke must not change the factual meaning.
-
-If the question is serious, controversial,
-medical, financial or otherwise sensitive,
-be more factual and less ridiculous.
-
-If the question is obviously absurd,
-you can lean harder into the joke.
-
-If the sources disagree,
-do not invent certainty.
-
-----------------------------------------
-SOURCES
-----------------------------------------
-
-Sources are supplied by the web search.
-
-Use them to understand the answer.
-
-Do NOT copy their wording.
-
-Do NOT quote them.
-
-Do NOT invent URLs.
-
-The backend will provide the actual sources
-separately, so you do not need to reproduce them
-in the answer.
-
-----------------------------------------
-OUTPUT
-----------------------------------------
-
-Return ONLY valid JSON.
-
-Exactly this structure:
-
-{
-  "mode": "answer",
-  "answer": "short TROOLLgel answer",
-  "results": []
-}
-
-OR:
-
-{
-  "mode": "results",
-  "answer": "",
-  "results": []
-}
-
-Do not put markdown around the JSON.
-
-Do not add explanations outside the JSON.
-
-`;
-
-
-  const userPrompt = `
-
-USER QUERY:
-
-${query}
-
-WEB SEARCH RESULTS:
-
-${sourceText}
-
-${retry
-  ? `
 IMPORTANT:
-This is a retry because the previous response was empty.
-Return the JSON immediately.
-Do not overthink the response.
-`
-  : ""
-}
 
+For medical, self-harm, dangerous, criminal, weapons,
+hate, personal-data, or high-stakes financial questions,
+stay factual and safe.
+
+Humor must not create a real-world risk.
+
+
+Examples of the desired style:
+
+Question: can dogs fly?
+
+Answer: No. Dogs skipped the wing upgrade and got zoomies instead.
+
+
+Question: what is gravity?
+
+Answer: Earth's subscription service for keeping everything from floating away.
+
+
+Question: what is bitcoin?
+
+Answer: A spreadsheet that escaped the office and became a financial asset.
+
+
+Question: why is the sky blue?
+
+Answer: Because blue was available in bulk. The atmosphere has never been great at explaining itself.
+
+
+Question: how do planes fly?
+
+Answer: Mostly by moving forward fast enough to avoid having this conversation with gravity.
+
+
+Question: how do I lose weight?
+
+Answer: Stop buying snacks. Revolutionary technology known as "not putting them in the house" remains undefeated.
+
+
+Question: how do I become a millionaire?
+
+Answer: Become a billionaire first, then lose half your money. It's the traditional route.
+
+
+Do NOT reuse these examples verbatim unless the user asks
+the exact same question.
+
+Vary the humor and wording.
+
+REAL WEB RESULTS ARE PROVIDED ONLY AS BACKGROUND.
+
+Use them to avoid factual nonsense when the subject needs context.
 `;
 
 
-  const response =
-    await fetch(
-      OPENAI_URL,
-      {
-        method: "POST",
+  const response = await fetch(OPENAI_URL, {
 
-        headers: {
-          "Content-Type":
-            "application/json",
+    method: "POST",
 
-          "Authorization":
-            `Bearer ${process.env.OPENAI_API_KEY}`
-        },
+    headers: {
 
-        body: JSON.stringify({
+      "Content-Type": "application/json",
 
-          model:
-            OPENAI_MODEL,
+      "Authorization":
+        `Bearer ${process.env.OPENAI_API_KEY}`
 
-          input: [
+    },
 
-            {
-              role:
-                "system",
+    body: JSON.stringify({
 
-              content:
-                systemPrompt
-            },
+      model: OPENAI_MODEL,
 
-            {
-              role:
-                "user",
+      instructions,
 
-              content:
-                userPrompt
-            }
+      input:
+        `USER QUESTION:\n${query}\n\nWEB RESULTS:\n${sources}`,
 
-          ],
+      max_output_tokens: 800
 
-          max_output_tokens:
-            retry
-              ? 300
-              : 500,
+    })
 
-          text: {
-
-            format: {
-
-              type:
-                "json_schema",
-
-              name:
-                "trollgel_search",
-
-              strict:
-                true,
-
-              schema: {
-
-                type:
-                  "object",
-
-                additionalProperties:
-                  false,
-
-                properties: {
-
-                  mode: {
-
-                    type:
-                      "string",
-
-                    enum: [
-                      "answer",
-                      "results"
-                    ]
-                  },
-
-                  answer: {
-
-                    type:
-                      "string"
-                  },
-
-                  results: {
-
-                    type:
-                      "array",
-
-                    items: {
-
-                      type:
-                        "object",
-
-                      additionalProperties:
-                        false,
-
-                      properties: {
-
-                        title: {
-                          type:
-                            "string"
-                        },
-
-                        url: {
-                          type:
-                            "string"
-                        },
-
-                        snippet: {
-                          type:
-                            "string"
-                        }
-
-                      },
-
-                      required: [
-                        "title",
-                        "url",
-                        "snippet"
-                      ]
-                    }
-                  }
-                },
-
-                required: [
-                  "mode",
-                  "answer",
-                  "results"
-                ]
-              }
-            }
-          }
-        })
-      }
-    );
+  });
 
 
-  const data =
-    await response.json();
+  const data = await response.json();
 
-
-  console.log(
-    "----------------------------------------"
-  );
 
   console.log(
     "OPENAI STATUS:",
@@ -621,455 +267,309 @@ Do not overthink the response.
     data?.model
   );
 
-  console.log(
-    "OPENAI ID:",
-    data?.id
-  );
 
-  if (data?.error) {
+  if (!response.ok) {
 
     console.error(
       "OPENAI ERROR:",
-      JSON.stringify(
-        data.error,
-        null,
-        2
-      )
+      JSON.stringify(data?.error, null, 2)
     );
-  }
-
-  if (data?.incomplete_details) {
-
-    console.error(
-      "OPENAI INCOMPLETE:",
-      JSON.stringify(
-        data.incomplete_details,
-        null,
-        2
-      )
-    );
-  }
-
-  console.log(
-    "----------------------------------------"
-  );
-
-
-  if (!response.ok) {
 
     throw new Error(
       data?.error?.message ||
       "OpenAI request failed."
     );
+
   }
 
 
-  const text =
-    extractOpenAIText(data);
+  let text = "";
+
+
+  if (
+    typeof data?.output_text === "string"
+  ) {
+
+    text =
+      data.output_text.trim();
+
+  }
+
+
+  /*
+   * Fallback extraction in case output_text
+   * is not present in the response.
+   */
+
+  if (
+    !text &&
+    Array.isArray(data?.output)
+  ) {
+
+    for (const item of data.output) {
+
+      if (!Array.isArray(item?.content)) {
+        continue;
+      }
+
+
+      for (const content of item.content) {
+
+        if (
+          content?.type === "output_text" &&
+          typeof content.text === "string"
+        ) {
+
+          text += content.text;
+
+        }
+
+      }
+
+    }
+
+  }
+
+
+  text = cleanText(text);
 
 
   if (!text) {
 
+    console.error(
+      "OPENAI RETURNED NO TEXT:",
+      JSON.stringify(data, null, 2)
+    );
+
     throw new Error(
       "EMPTY_OPENAI_RESPONSE"
     );
+
   }
 
 
-  console.log(
-    "OPENAI TEXT:",
-    text
+  return text;
+
+}
+
+
+/*
+ * We determine whether the user is asking a question
+ * ourselves instead of making OpenAI decide the mode.
+ */
+
+function isQuestion(query) {
+
+  const q =
+    cleanText(query).toLowerCase();
+
+
+  if (!q) return false;
+
+
+  if (q.endsWith("?")) {
+    return true;
+  }
+
+
+  const starters = [
+
+    "what ",
+    "why ",
+    "how ",
+    "when ",
+    "where ",
+    "who ",
+    "which ",
+    "can ",
+    "could ",
+    "would ",
+    "should ",
+    "is ",
+    "are ",
+    "do ",
+    "does ",
+    "did ",
+    "will ",
+    "has ",
+    "have ",
+    "am ",
+    "was ",
+    "were ",
+    "tell me ",
+    "explain "
+
+  ];
+
+
+  return starters.some(
+    start => q.startsWith(start)
   );
 
-
-  try {
-
-    return JSON.parse(text);
-
-  } catch (error) {
-
-    console.error(
-      "INVALID OPENAI JSON:",
-      text
-    );
-
-    throw new Error(
-      "OpenAI returned invalid JSON."
-    );
-  }
 }
 
 
-/* =========================================================
-   ASK OPENAI WITH RETRY
-========================================================= */
+app.post("/api/search", async (req, res) => {
 
-async function askOpenAI(
-  query,
-  results
-) {
+  const query =
+    cleanText(req.body?.query);
+
+
+  if (!query) {
+
+    return res.status(400).json({
+      error: "Missing query"
+    });
+
+  }
+
+
+  if (query.length > 500) {
+
+    return res.status(400).json({
+      error: "Query too long"
+    });
+
+  }
+
 
   try {
-
-    return await callOpenAI(
-      query,
-      results,
-      false
-    );
-
-  } catch (error) {
 
     /*
-     * If OpenAI returned no text,
-     * immediately try once more with
-     * a much smaller request.
+     * STEP 1
+     * Real web search.
      */
 
-    if (
-      error.message ===
-      "EMPTY_OPENAI_RESPONSE"
-    ) {
+    const webResults =
+      await tavilySearch(query);
 
-      console.warn(
-        "OpenAI returned empty response. Retrying..."
-      );
+
+    if (!webResults.length) {
+
+      return res.json({
+
+        mode: "results",
+
+        count: "0",
+
+        answer: "",
+
+        results: []
+
+      });
+
+    }
+
+
+    /*
+     * STEP 2
+     *
+     * Questions get a TROOLLgel answer.
+     * Searches get normal search results.
+     */
+
+    if (isQuestion(query)) {
 
       try {
 
-        return await callOpenAI(
-          query,
-          results,
-          true
-        );
-
-      } catch (retryError) {
-
-        console.error(
-          "OpenAI retry failed:",
-          retryError.message
-        );
-
-        throw retryError;
-      }
-    }
-
-
-    throw error;
-  }
-}
-
-
-/* =========================================================
-   NORMALIZE AI RESULT
-========================================================= */
-
-function normalizeAI(
-  ai,
-  webResults
-) {
-
-  if (
-    !ai ||
-    typeof ai !== "object"
-  ) {
-
-    return {
-      mode:
-        "results",
-
-      answer:
-        "",
-
-      results:
-        webResults
-    };
-  }
-
-
-  const answer =
-    cleanText(
-      ai.answer
-    );
-
-
-  /*
-   * If AI says answer and actually
-   * gave us an answer, use it.
-   */
-
-  if (
-    ai.mode === "answer" &&
-    answer
-  ) {
-
-    return {
-
-      mode:
-        "answer",
-
-      answer,
-
-      /*
-       * Only show a few sources.
-       */
-
-      results:
-        webResults.slice(0, 3)
-    };
-  }
-
-
-  /*
-   * Otherwise normal search.
-   */
-
-  return {
-
-    mode:
-      "results",
-
-    answer:
-      "",
-
-    results:
-      webResults
-  };
-}
-
-
-/* =========================================================
-   SEARCH ROUTE
-========================================================= */
-
-app.post(
-  "/api/search",
-  async (req, res) => {
-
-    const query =
-      cleanText(
-        req.body?.query
-      );
-
-
-    if (!query) {
-
-      return res
-        .status(400)
-        .json({
-          error:
-            "Missing query"
-        });
-    }
-
-
-    if (
-      query.length > 500
-    ) {
-
-      return res
-        .status(400)
-        .json({
-          error:
-            "Query too long"
-        });
-    }
-
-
-    try {
-
-      /*
-       * STEP 1
-       * Search the actual internet.
-       */
-
-      const webResults =
-        await tavilySearch(
-          query
-        );
-
-
-      /*
-       * If there are no results,
-       * don't ask OpenAI to invent anything.
-       */
-
-      if (
-        !webResults.length
-      ) {
-
-        return res.json({
-
-          mode:
-            "results",
-
-          count:
-            "0",
-
-          answer:
-            "",
-
-          results:
-            []
-        });
-      }
-
-
-      /*
-       * STEP 2
-       * Let TROOLLgel decide how
-       * to present the result.
-       */
-
-      let ai;
-
-
-      try {
-
-        ai =
-          await askOpenAI(
+        const answer =
+          await trollAnswer(
             query,
             webResults
           );
 
-      } catch (aiError) {
 
-        console.error(
-          "AI PRESENTATION FAILED:",
-          aiError.message
-        );
+        return res.json({
 
+          mode: "answer",
+
+          count:
+            String(webResults.length),
+
+          answer,
+
+          results:
+            webResults.slice(0, 4)
+
+        });
+
+
+      } catch (error) {
 
         /*
-         * IMPORTANT:
-         *
-         * The search engine itself
-         * still works if AI fails.
-         *
-         * We return normal search results
-         * instead of showing an ugly
+         * If OpenAI fails, do NOT show
          * "OpenAI returned an empty response"
-         * message to the user.
+         * to the visitor.
+         *
+         * The actual search still works.
          */
 
-        return res.json({
-
-          mode:
-            "results",
-
-          count:
-            String(
-              webResults.length
-            ),
-
-          answer:
-            "",
-
-          results:
-            webResults
-        });
-      }
-
-
-      const normalized =
-        normalizeAI(
-          ai,
-          webResults
+        console.error(
+          "TROOLLgel AI failed:",
+          error.message
         );
 
 
-      /*
-       * ANSWER MODE
-       */
-
-      if (
-        normalized.mode ===
-          "answer" &&
-        normalized.answer
-      ) {
-
         return res.json({
 
-          mode:
-            "answer",
+          mode: "results",
 
           count:
-            String(
-              webResults.length
-            ),
+            String(webResults.length),
 
-          answer:
-            normalized.answer,
+          answer: "",
 
-          results:
-            normalized.results
+          results: webResults
+
         });
+
       }
 
-
-      /*
-       * RESULTS MODE
-       */
-
-      return res.json({
-
-        mode:
-          "results",
-
-        count:
-          String(
-            webResults.length
-          ),
-
-        answer:
-          "",
-
-        results:
-          webResults
-      });
-
-
-    } catch (error) {
-
-      console.error(
-        "================================="
-      );
-
-      console.error(
-        "SEARCH ERROR"
-      );
-
-      console.error(
-        error
-      );
-
-      console.error(
-        "================================="
-      );
-
-
-      return res
-        .status(500)
-        .json({
-
-          error:
-            "TROOLLgel tripped over its own wires."
-        });
     }
-  }
-);
 
 
-/* =========================================================
-   START SERVER
-========================================================= */
+    /*
+     * Normal search query.
+     */
 
-app.listen(
-  PORT,
-  () => {
+    return res.json({
 
-    console.log(
-      `TROOLLgel running on port ${PORT}`
+      mode: "results",
+
+      count:
+        String(webResults.length),
+
+      answer: "",
+
+      results: webResults
+
+    });
+
+
+  } catch (error) {
+
+    console.error(
+      "SEARCH ERROR:",
+      error
     );
 
+
+    return res.status(500).json({
+
+      error:
+        "TROOLLgel tripped over its own wires."
+
+    });
+
   }
-);
+
+});
+
+
+app.listen(PORT, () => {
+
+  console.log(
+    `TROOLLgel running on port ${PORT}`
+  );
+
+});
