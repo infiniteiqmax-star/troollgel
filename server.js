@@ -44,7 +44,6 @@ async function tavilySearch(query) {
     throw new Error("TAVILY_API_KEY is not configured.");
   }
 
-
   const response = await fetch(TAVILY_URL, {
 
     method: "POST",
@@ -73,9 +72,7 @@ async function tavilySearch(query) {
 
   });
 
-
   const data = await response.json();
-
 
   if (!response.ok) {
 
@@ -90,20 +87,16 @@ async function tavilySearch(query) {
 
   }
 
-
   return safeResults(data.results);
 
 }
 
 
 /*
- * NAVIGATIONAL / REAL SEARCH QUERIES
+ * Detect queries where the user actually wants
+ * real current/navigation/search information.
  *
- * These are things where the user actually wants
- * to find a website, current information, a place,
- * a product, a result, etc.
- *
- * These should NOT be trolled.
+ * These are NOT trolled.
  */
 
 function isRealSearch(query) {
@@ -115,7 +108,7 @@ function isRealSearch(query) {
   const patterns = [
 
     /*
-     * Specific websites
+     * Direct websites
      */
 
     /^google$/,
@@ -126,13 +119,13 @@ function isRealSearch(query) {
     /^wikipedia$/,
 
     /*
-     * URLs / domains
+     * URLs
      */
 
+    /^https?:\/\//,
     /\.com$/,
     /\.net$/,
     /\.org$/,
-    /^https?:\/\//,
 
     /*
      * Current information
@@ -148,22 +141,22 @@ function isRealSearch(query) {
     /\b(exchange rate|currency rate)\b/,
 
     /*
-     * Sports scores / results
+     * Sports
      */
 
-    /\b(score|scores|result|results|standings|schedule)\b/,
+    /\b(score|scores|standings|schedule|fixtures|results)\b/,
 
     /*
-     * Specific places / navigation
+     * Navigation / nearby places
      */
 
     /\bnear me\b/,
-    /\bdirections\b/,
-    /\bopening hours\b/,
     /\bopen now\b/,
+    /\bopening hours\b/,
+    /\bdirections\b/,
 
     /*
-     * Specific websites/pages
+     * Website navigation
      */
 
     /\bwebsite\b/,
@@ -172,18 +165,11 @@ function isRealSearch(query) {
     /\bofficial site\b/,
 
     /*
-     * Specific product lookup
+     * Tracking
      */
 
     /\btracking number\b/,
-    /\border status\b/,
-
-    /*
-     * Specific news/current person searches
-     */
-
-    /\bwhat happened to\b/,
-    /\bwhere is\b.*\bnow\b/
+    /\border status\b/
 
   ];
 
@@ -196,39 +182,256 @@ function isRealSearch(query) {
 
 
 /*
- * EVERYTHING ELSE THAT LOOKS LIKE A QUESTION
- * OR A REQUEST FOR INFORMATION IS TROLLED.
+ * Find a suitable CONTRA category.
  *
- * This is intentionally broad.
+ * If the request has a natural opposite,
+ * we search for that opposite and show real links.
  *
- * Examples:
- *
- * what is gravity?
- * can dogs fly?
- * how do I lose weight?
- * why is the sky blue?
- * 10 best burgers
- * 10 best vegan restaurants
- * best pizza in town
- * give me 5 good movies
- * recommend a laptop
- *
- * All of those can become TROOLLgel answers.
+ * If there isn't a good opposite,
+ * return null and show only the troll answer.
  */
 
-function shouldTroll(query) {
+function getContraQuery(query) {
 
-  if (isRealSearch(query)) {
-    return false;
+  const q =
+    cleanText(query).toLowerCase();
+
+
+  /*
+   * BURGERS <-> VEGAN
+   */
+
+  if (
+    /\b(burger|burgers)\b/.test(q)
+  ) {
+
+    return "best vegan restaurants " +
+      extractLocation(q);
+
   }
 
-  return true;
+
+  if (
+    /\b(vegan|vegan restaurants)\b/.test(q)
+  ) {
+
+    return "best burger restaurants " +
+      extractLocation(q);
+
+  }
+
+
+  /*
+   * PIZZA <-> SUSHI
+   */
+
+  if (
+    /\bpizza\b/.test(q)
+  ) {
+
+    return "best sushi restaurants " +
+      extractLocation(q);
+
+  }
+
+
+  if (
+    /\bsushi\b/.test(q)
+  ) {
+
+    return "best pizza restaurants " +
+      extractLocation(q);
+
+  }
+
+
+  /*
+   * HEALTHY <-> JUNK FOOD
+   */
+
+  if (
+    /\b(healthy|healthy food|healthy restaurants)\b/.test(q)
+  ) {
+
+    return "best burger restaurants " +
+      extractLocation(q);
+
+  }
+
+
+  /*
+   * WEIGHT LOSS <-> BURGERS / DESSERT
+   */
+
+  if (
+    /\b(lose weight|weight loss|losing weight|diet)\b/.test(q)
+  ) {
+
+    return "best burger restaurants";
+
+  }
+
+
+  /*
+   * FITNESS <-> LAZY / FOOD
+   */
+
+  if (
+    /\b(workout|workouts|exercise|gym|fitness)\b/.test(q)
+  ) {
+
+    return "best burger restaurants";
+
+  }
+
+
+  /*
+   * MOVIES <-> TV
+   */
+
+  if (
+    /\b(movie|movies|film|films)\b/.test(q)
+  ) {
+
+    return "best TV shows";
+
+  }
+
+
+  if (
+    /\b(tv shows?|series)\b/.test(q)
+  ) {
+
+    return "best movies";
+
+  }
+
+
+  /*
+   * DOGS <-> CATS
+   */
+
+  if (
+    /\bdogs?\b/.test(q)
+  ) {
+
+    return "funny cats";
+
+  }
+
+
+  if (
+    /\bcats?\b/.test(q)
+  ) {
+
+    return "funny dogs";
+
+  }
+
+
+  /*
+   * COFFEE <-> TEA
+   */
+
+  if (
+    /\bcoffee\b/.test(q)
+  ) {
+
+    return "best tea cafes";
+
+  }
+
+
+  if (
+    /\btea\b/.test(q)
+  ) {
+
+    return "best coffee cafes";
+
+  }
+
+
+  /*
+   * ANDROID <-> IPHONE
+   */
+
+  if (
+    /\bandroid\b/.test(q)
+  ) {
+
+    return "best iPhone";
+
+  }
+
+
+  if (
+    /\biphone\b/.test(q)
+  ) {
+
+    return "best Android phones";
+
+  }
+
+
+  /*
+   * PC <-> CONSOLE
+   */
+
+  if (
+    /\b(pc gaming|gaming pc|gaming computer)\b/.test(q)
+  ) {
+
+    return "best gaming consoles";
+
+  }
+
+
+  if (
+    /\b(playstation|xbox|gaming console|gaming consoles)\b/.test(q)
+  ) {
+
+    return "best gaming PCs";
+
+  }
+
+
+  /*
+   * Otherwise no contra search.
+   */
+
+  return null;
 
 }
 
 
 /*
- * TROOLL ANSWER
+ * Try to preserve a location such as:
+ *
+ * "in Ljubljana"
+ * "near Ljubljana"
+ * "in New York"
+ *
+ * We don't need perfect NLP here.
+ */
+
+function extractLocation(query) {
+
+  const match =
+    query.match(
+      /\b(?:in|near)\s+(.+)$/i
+    );
+
+  if (!match) {
+    return "";
+  }
+
+  return cleanText(match[1]);
+
+}
+
+
+/*
+ * Generate the short troll answer.
  */
 
 async function trollAnswer(query) {
@@ -246,195 +449,129 @@ You are TROOLLgel.
 
 TROOLLgel is a parody search engine.
 
-Your job is to answer the user's request with
-a SHORT, CONFIDENT, FUNNY, ABSURD answer.
+Your job is to give the user a SHORT,
+confident, funny and absurd answer.
 
 You are deliberately NOT a normal search engine.
-
-IMPORTANT:
 
 The user may ask:
 
 - a factual question
-- a "how do I" question
+- a how-to question
 - a recommendation
 - a ranking
 - a list
-- a shopping question
 - a request for restaurants
 - a request for burgers
-- a request for movies
 - a request for products
-- basically anything that is not clearly a
-  navigational/current-information search.
+- a request for movies
+- a request for anything else
 
-You MUST troll these requests.
+You MUST troll the request.
 
-DO NOT simply give the real answer.
+Do NOT give the real answer.
 
-DO NOT give a real list.
+Do NOT provide a real list.
 
-DO NOT provide real recommendations.
+Do NOT provide actual recommendations.
 
-DO NOT provide actual restaurants.
+Do NOT provide actual restaurants.
 
-DO NOT provide actual burgers.
+Do NOT provide actual burgers.
 
-DO NOT provide actual products.
+Do NOT provide actual products.
 
-DO NOT provide links.
+Do NOT provide links.
 
-DO NOT list sources.
+Do NOT mention sources.
 
-DO NOT explain that you are joking.
+Do NOT explain the joke.
 
-The answer should be obviously absurd,
-confident and deadpan.
+Do NOT say that you are a parody.
 
-Keep it VERY SHORT.
+Do NOT mention AI.
+
+Do NOT mention OpenAI.
+
+Keep the answer extremely short.
 
 Normally ONE sentence.
 
 Maximum TWO short sentences.
 
-The humor should directly relate to the request.
+The joke must directly relate to the user's request.
 
 Examples:
 
 USER:
 what is gravity?
 
-GOOD:
-"Gravity is Earth's way of politely asking everyone to remain where they were placed."
+ANSWER:
+Gravity is Earth's way of saying "stay down there" while pretending it has everything under control.
 
 USER:
 can dogs fly?
 
-GOOD:
-"Only when launched by a very optimistic squirrel."
+ANSWER:
+Only when launched by a very optimistic squirrel.
 
 USER:
 why is the sky blue?
 
-GOOD:
-"Because the atmosphere ordered blue in bulk and has been trying to use it up ever since."
+ANSWER:
+Because the atmosphere bought blue in bulk and has been trying to finish the order ever since.
 
 USER:
 how do I lose weight?
 
-GOOD:
-"Put your snacks on a high shelf and declare the staircase your personal fitness rival."
+ANSWER:
+Put your snacks on a high shelf and declare the staircase your personal fitness rival.
 
 USER:
-how do I become a millionaire?
+10 best burgers
 
-GOOD:
-"Become a billionaire first, then make several exciting financial decisions."
-
-USER:
-what are the 10 best burgers?
-
-GOOD:
-"The top ten burgers are currently unavailable because they formed a union and demanded better buns."
-
-USER:
-give me 10 best burgers in town
-
-GOOD:
-"I checked the rankings, and Burger #1 has been disqualified for excessive confidence."
+ANSWER:
+The top ten burgers have unionized and are currently negotiating better buns.
 
 USER:
 10 best vegan restaurants
 
-GOOD:
-"The top ten are all secretly run by one very tired carrot."
+ANSWER:
+The top ten vegan restaurants are actually one very ambitious carrot operating ten different businesses.
 
 USER:
 recommend a laptop
 
-GOOD:
-"Buy the one that looks most expensive when you close the lid."
-
-USER:
-give me 5 good movies
-
-GOOD:
-"Five excellent films exist, but they are currently hiding from people who ask for lists."
-
-USER:
-what is bitcoin?
-
-GOOD:
-"Bitcoin is a spreadsheet that escaped the office and discovered that people enjoy making things unnecessarily complicated."
-
-USER:
-how do planes fly?
-
-GOOD:
-"Mostly by moving forward fast enough to convince gravity that it has somewhere else to be."
+ANSWER:
+Buy the one that looks most expensive when you close the lid.
 
 IMPORTANT:
 
-These are STYLE examples only.
+These are examples of STYLE ONLY.
 
-NEVER copy them word-for-word unless the user asks
-the exact same question.
+Never copy them word-for-word.
 
-Always invent a fresh answer.
+Invent a fresh joke specifically for the user's request.
 
-VERY IMPORTANT:
+If the user asks for a list,
+DO NOT give the actual list.
 
-Do not turn the joke into a factual answer.
-
-For example, if the user asks:
-
-"10 best burgers in town"
-
-DO NOT respond with actual burger names.
-
-DO NOT respond with actual restaurants.
-
-DO NOT provide a real ranking.
-
-Instead produce a short absurd joke ABOUT the ranking.
-
-If the user asks:
-
-"10 best vegan restaurants"
-
+If the user asks for restaurants,
 DO NOT give actual restaurants.
 
-Make fun of the request instead.
+If the user asks for burgers,
+DO NOT give actual burgers.
 
-If the user asks:
+Instead make the REQUEST itself the subject of the joke.
 
-"how can I lose weight"
+For dangerous or high-risk requests,
+remain safe and do not provide harmful instructions.
 
-DO NOT give normal weight-loss advice.
-
-Make it a funny TROOLLgel answer.
-
-The only exception is genuinely dangerous content,
-where you must remain safe and must not provide
-harmful instructions.
-
-DO NOT mention AI.
-
-DO NOT mention OpenAI.
-
-DO NOT mention prompts.
-
-DO NOT mention instructions.
-
-DO NOT mention sources.
-
-DO NOT use markdown.
-
-DO NOT use bullet points.
-
-DO NOT write an essay.
-
-DO NOT use a disclaimer.
+No markdown.
+No bullet points.
+No sources.
+No URLs.
+No explanation.
 
 USER REQUEST:
 
@@ -502,10 +639,6 @@ ${query}
   }
 
 
-  /*
-   * Fallback extraction.
-   */
-
   if (
     !text &&
     Array.isArray(data?.output)
@@ -516,7 +649,6 @@ ${query}
       if (!Array.isArray(item?.content)) {
         continue;
       }
-
 
       for (const content of item.content) {
 
@@ -584,10 +716,7 @@ app.post("/api/search", async (req, res) => {
   try {
 
     /*
-     * First do a real search.
-     *
-     * This gives TROOLLgel context if needed,
-     * but the results are NOT shown when we troll.
+     * First search the user's actual query.
      */
 
     const webResults =
@@ -595,7 +724,7 @@ app.post("/api/search", async (req, res) => {
 
 
     /*
-     * NAVIGATIONAL / CURRENT SEARCH
+     * TRUE NAVIGATION / CURRENT SEARCH
      *
      * Show real results.
      */
@@ -620,91 +749,135 @@ app.post("/api/search", async (req, res) => {
 
 
     /*
-     * EVERYTHING ELSE
-     *
-     * TROLL.
+     * EVERYTHING ELSE IS TROLLED.
      */
 
-    if (shouldTroll(query)) {
+    let answer;
 
-      try {
+    try {
 
-        const answer =
-          await trollAnswer(query);
+      answer =
+        await trollAnswer(query);
 
+    } catch (error) {
 
-        return res.json({
-
-          mode: "answer",
-
-          answerMode: "troll",
-
-          count:
-            String(webResults.length),
-
-          answer,
-
-          /*
-           * VERY IMPORTANT:
-           *
-           * No sources underneath the troll.
-           */
-
-          results: []
-
-        });
+      console.error(
+        "TROLL ANSWER ERROR:",
+        error.message
+      );
 
 
-      } catch (error) {
+      /*
+       * Never expose the real results as a fallback.
+       * That would destroy the joke.
+       */
 
-        console.error(
-          "TROOLLgel AI failed:",
-          error.message
-        );
+      return res.json({
 
+        mode: "answer",
 
-        /*
-         * DO NOT reveal the real search results
-         * when a troll answer fails.
-         *
-         * Give a short fallback troll instead.
-         */
+        answerMode: "troll",
 
-        return res.json({
+        count: "0",
 
-          mode: "answer",
+        answer:
+          "TROOLLgel had a perfectly good answer, but it wandered off.",
 
-          answerMode: "troll",
+        results: []
 
-          count: "0",
-
-          answer:
-            "TROOLLgel knows the answer, but it has temporarily misplaced it.",
-
-          results: []
-
-        });
-
-      }
+      });
 
     }
 
 
     /*
-     * Final fallback.
+     * Determine whether this request has
+     * a useful CONTRA category.
+     */
+
+    const contraQuery =
+      getContraQuery(query);
+
+
+    /*
+     * No contra category:
+     *
+     * Just show the troll answer.
+     */
+
+    if (!contraQuery) {
+
+      return res.json({
+
+        mode: "answer",
+
+        answerMode: "troll",
+
+        count:
+          String(webResults.length),
+
+        answer,
+
+        results: []
+
+      });
+
+    }
+
+
+    /*
+     * CONTRA SEARCH
+     *
+     * Search the opposite category.
+     */
+
+    let contraResults = [];
+
+
+    try {
+
+      contraResults =
+        await tavilySearch(
+          contraQuery
+        );
+
+    } catch (error) {
+
+      console.error(
+        "CONTRA SEARCH ERROR:",
+        error.message
+      );
+
+      contraResults = [];
+
+    }
+
+
+    /*
+     * Return the troll answer PLUS
+     * the opposite-category results.
+     *
+     * The frontend can display these
+     * underneath the answer.
      */
 
     return res.json({
 
-      mode: "results",
+      mode: "answer",
+
+      answerMode: "troll",
 
       count:
-        String(webResults.length),
+        String(
+          contraResults.length ||
+          webResults.length
+        ),
 
-      answer: "",
+      answer,
 
-      results:
-        webResults
+      contraQuery,
+
+      contraResults
 
     });
 
