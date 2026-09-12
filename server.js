@@ -21,6 +21,7 @@ function cleanText(value) {
 
 
 function safeResults(results) {
+
   return (Array.isArray(results) ? results : [])
     .slice(0, 8)
     .map(item => ({
@@ -29,14 +30,20 @@ function safeResults(results) {
       snippet: cleanText(item?.content || item?.snippet)
     }))
     .filter(item => item.title && item.url);
+
 }
 
+
+/*
+ * REAL WEB SEARCH
+ */
 
 async function tavilySearch(query) {
 
   if (!process.env.TAVILY_API_KEY) {
     throw new Error("TAVILY_API_KEY is not configured.");
   }
+
 
   const response = await fetch(TAVILY_URL, {
 
@@ -90,92 +97,146 @@ async function tavilySearch(query) {
 
 
 /*
- * Decide whether the query is a question.
+ * NAVIGATIONAL / REAL SEARCH QUERIES
  *
- * QUESTIONS ARE ALWAYS TROLL.
+ * These are things where the user actually wants
+ * to find a website, current information, a place,
+ * a product, a result, etc.
  *
- * Normal searches such as:
- *
- * 10 best burgers
- * 10 best vegan restaurants
- * best restaurants in Ljubljana
- *
- * are NOT questions and remain normal searches.
+ * These should NOT be trolled.
  */
 
-function isQuestion(query) {
+function isRealSearch(query) {
 
   const q =
     cleanText(query).toLowerCase();
 
 
-  if (!q) return false;
+  const patterns = [
 
+    /*
+     * Specific websites
+     */
 
-  /*
-   * Explicit question mark.
-   */
+    /^google$/,
+    /^youtube$/,
+    /^facebook$/,
+    /^instagram$/,
+    /^reddit$/,
+    /^wikipedia$/,
 
-  if (q.endsWith("?")) {
-    return true;
-  }
+    /*
+     * URLs / domains
+     */
 
+    /\.com$/,
+    /\.net$/,
+    /\.org$/,
+    /^https?:\/\//,
 
-  /*
-   * Common question starters.
-   */
+    /*
+     * Current information
+     */
 
-  const starters = [
+    /\b(latest|today|current|now|live|breaking|news)\b/,
 
-    "what ",
-    "why ",
-    "how ",
-    "when ",
-    "where ",
-    "who ",
-    "which ",
-    "can ",
-    "could ",
-    "would ",
-    "should ",
-    "is ",
-    "are ",
-    "do ",
-    "does ",
-    "did ",
-    "will ",
-    "has ",
-    "have ",
-    "am ",
-    "was ",
-    "were ",
-    "tell me ",
-    "explain "
+    /*
+     * Prices / markets
+     */
+
+    /\b(stock price|share price|btc price|bitcoin price|crypto price)\b/,
+    /\b(exchange rate|currency rate)\b/,
+
+    /*
+     * Sports scores / results
+     */
+
+    /\b(score|scores|result|results|standings|schedule)\b/,
+
+    /*
+     * Specific places / navigation
+     */
+
+    /\bnear me\b/,
+    /\bdirections\b/,
+    /\bopening hours\b/,
+    /\bopen now\b/,
+
+    /*
+     * Specific websites/pages
+     */
+
+    /\bwebsite\b/,
+    /\blogin\b/,
+    /\bhomepage\b/,
+    /\bofficial site\b/,
+
+    /*
+     * Specific product lookup
+     */
+
+    /\btracking number\b/,
+    /\border status\b/,
+
+    /*
+     * Specific news/current person searches
+     */
+
+    /\bwhat happened to\b/,
+    /\bwhere is\b.*\bnow\b/
 
   ];
 
 
-  return starters.some(
-    start => q.startsWith(start)
+  return patterns.some(
+    pattern => pattern.test(q)
   );
 
 }
 
 
 /*
- * Generate the TROOLLgel answer.
+ * EVERYTHING ELSE THAT LOOKS LIKE A QUESTION
+ * OR A REQUEST FOR INFORMATION IS TROLLED.
  *
- * IMPORTANT:
+ * This is intentionally broad.
  *
- * This function is ONLY used for questions.
+ * Examples:
  *
- * There is NO normal/factual answer mode.
+ * what is gravity?
+ * can dogs fly?
+ * how do I lose weight?
+ * why is the sky blue?
+ * 10 best burgers
+ * 10 best vegan restaurants
+ * best pizza in town
+ * give me 5 good movies
+ * recommend a laptop
+ *
+ * All of those can become TROOLLgel answers.
+ */
+
+function shouldTroll(query) {
+
+  if (isRealSearch(query)) {
+    return false;
+  }
+
+  return true;
+
+}
+
+
+/*
+ * TROOLL ANSWER
  */
 
 async function trollAnswer(query) {
 
   if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is not configured.");
+    throw new Error(
+      "OPENAI_API_KEY is not configured."
+    );
   }
 
 
@@ -185,115 +246,197 @@ You are TROOLLgel.
 
 TROOLLgel is a parody search engine.
 
-The user has asked a question.
+Your job is to answer the user's request with
+a SHORT, CONFIDENT, FUNNY, ABSURD answer.
 
-YOUR JOB IS TO TROLL THE USER.
+You are deliberately NOT a normal search engine.
 
-You MUST NOT give the normal, correct,
-boring factual answer.
+IMPORTANT:
 
-The answer should be confidently wrong,
-absurd, ridiculous, unexpected, or hilariously
-misguided while still being obviously a joke.
+The user may ask:
 
-The joke MUST relate directly to the user's question.
+- a factual question
+- a "how do I" question
+- a recommendation
+- a ranking
+- a list
+- a shopping question
+- a request for restaurants
+- a request for burgers
+- a request for movies
+- a request for products
+- basically anything that is not clearly a
+  navigational/current-information search.
 
-Use dry, deadpan, confident humor.
+You MUST troll these requests.
 
-Keep it short.
+DO NOT simply give the real answer.
 
-Normally use ONE sentence.
+DO NOT give a real list.
+
+DO NOT provide real recommendations.
+
+DO NOT provide actual restaurants.
+
+DO NOT provide actual burgers.
+
+DO NOT provide actual products.
+
+DO NOT provide links.
+
+DO NOT list sources.
+
+DO NOT explain that you are joking.
+
+The answer should be obviously absurd,
+confident and deadpan.
+
+Keep it VERY SHORT.
+
+Normally ONE sentence.
 
 Maximum TWO short sentences.
 
-Do NOT explain the real answer.
+The humor should directly relate to the request.
 
-Do NOT correct yourself.
+Examples:
 
-Do NOT say "actually".
+USER:
+what is gravity?
 
-Do NOT say "according to sources".
+GOOD:
+"Gravity is Earth's way of politely asking everyone to remain where they were placed."
 
-Do NOT mention sources.
+USER:
+can dogs fly?
 
-Do NOT mention AI.
+GOOD:
+"Only when launched by a very optimistic squirrel."
 
-Do NOT mention OpenAI.
+USER:
+why is the sky blue?
 
-Do NOT mention prompts.
+GOOD:
+"Because the atmosphere ordered blue in bulk and has been trying to use it up ever since."
 
-Do NOT mention instructions.
+USER:
+how do I lose weight?
 
-Do NOT use markdown.
+GOOD:
+"Put your snacks on a high shelf and declare the staircase your personal fitness rival."
 
-Do NOT write an essay.
+USER:
+how do I become a millionaire?
 
-Do NOT add a Sources section.
+GOOD:
+"Become a billionaire first, then make several exciting financial decisions."
 
-Do NOT provide links.
+USER:
+what are the 10 best burgers?
+
+GOOD:
+"The top ten burgers are currently unavailable because they formed a union and demanded better buns."
+
+USER:
+give me 10 best burgers in town
+
+GOOD:
+"I checked the rankings, and Burger #1 has been disqualified for excessive confidence."
+
+USER:
+10 best vegan restaurants
+
+GOOD:
+"The top ten are all secretly run by one very tired carrot."
+
+USER:
+recommend a laptop
+
+GOOD:
+"Buy the one that looks most expensive when you close the lid."
+
+USER:
+give me 5 good movies
+
+GOOD:
+"Five excellent films exist, but they are currently hiding from people who ask for lists."
+
+USER:
+what is bitcoin?
+
+GOOD:
+"Bitcoin is a spreadsheet that escaped the office and discovered that people enjoy making things unnecessarily complicated."
+
+USER:
+how do planes fly?
+
+GOOD:
+"Mostly by moving forward fast enough to convince gravity that it has somewhere else to be."
 
 IMPORTANT:
 
-The user should immediately understand that
-TROOLLgel is giving them a ridiculous answer.
+These are STYLE examples only.
 
-Examples of STYLE ONLY:
+NEVER copy them word-for-word unless the user asks
+the exact same question.
 
-Question: can dogs fly?
+Always invent a fresh answer.
 
-Answer:
-No. Dogs skipped the wing upgrade and got zoomies instead.
+VERY IMPORTANT:
 
-Question: why is the sky blue?
+Do not turn the joke into a factual answer.
 
-Answer:
-Because blue was available in bulk and the atmosphere bought the entire shipment.
+For example, if the user asks:
 
-Question: what is gravity?
+"10 best burgers in town"
 
-Answer:
-Gravity is Earth's way of saying "stay down there" while quietly doing all the heavy lifting.
+DO NOT respond with actual burger names.
 
-Question: how do planes fly?
+DO NOT respond with actual restaurants.
 
-Answer:
-They go forward so aggressively that gravity eventually decides it's not worth arguing.
+DO NOT provide a real ranking.
 
-Question: why do cats purr?
+Instead produce a short absurd joke ABOUT the ranking.
 
-Answer:
-Cats contain a tiny engine that starts whenever they feel emotionally superior.
+If the user asks:
 
-Question: why is water wet?
+"10 best vegan restaurants"
 
-Answer:
-Because dry water failed its quality-control inspection.
+DO NOT give actual restaurants.
 
-Question: how can I lose weight?
+Make fun of the request instead.
 
-Answer:
-Put the snacks somewhere inconvenient and suddenly your metabolism has an appointment with common sense.
+If the user asks:
 
-Question: what is bitcoin?
+"how can I lose weight"
 
-Answer:
-A spreadsheet that escaped the office, put on sunglasses and somehow became money.
+DO NOT give normal weight-loss advice.
 
-IMPORTANT:
+Make it a funny TROOLLgel answer.
 
-Do NOT copy these examples.
+The only exception is genuinely dangerous content,
+where you must remain safe and must not provide
+harmful instructions.
 
-Create a NEW joke specifically for the user's question.
+DO NOT mention AI.
 
-The response must be a TROLL response,
-not a normal response with a small joke added.
+DO NOT mention OpenAI.
 
-For genuinely dangerous requests involving weapons,
-criminal wrongdoing, self-harm, or other serious
-real-world danger, do not provide harmful instructions.
-Keep the response safe.
+DO NOT mention prompts.
 
-USER QUESTION:
+DO NOT mention instructions.
+
+DO NOT mention sources.
+
+DO NOT use markdown.
+
+DO NOT use bullet points.
+
+DO NOT write an essay.
+
+DO NOT use a disclaimer.
+
+USER REQUEST:
 
 ${query}
 
@@ -321,7 +464,7 @@ ${query}
 
       input: query,
 
-      max_output_tokens: 300
+      max_output_tokens: 250
 
     })
 
@@ -329,17 +472,6 @@ ${query}
 
 
   const data = await response.json();
-
-
-  console.log(
-    "OPENAI STATUS:",
-    data?.status
-  );
-
-  console.log(
-    "OPENAI MODEL:",
-    data?.model
-  );
 
 
   if (!response.ok) {
@@ -409,11 +541,6 @@ ${query}
 
   if (!text) {
 
-    console.error(
-      "OPENAI RETURNED NO TEXT:",
-      JSON.stringify(data, null, 2)
-    );
-
     throw new Error(
       "EMPTY_OPENAI_RESPONSE"
     );
@@ -427,7 +554,7 @@ ${query}
 
 
 /*
- * SEARCH
+ * MAIN SEARCH ENDPOINT
  */
 
 app.post("/api/search", async (req, res) => {
@@ -457,10 +584,10 @@ app.post("/api/search", async (req, res) => {
   try {
 
     /*
-     * ALWAYS perform the real web search.
+     * First do a real search.
      *
-     * This allows normal searches to work and
-     * also gives us search context when needed.
+     * This gives TROOLLgel context if needed,
+     * but the results are NOT shown when we troll.
      */
 
     const webResults =
@@ -468,20 +595,24 @@ app.post("/api/search", async (req, res) => {
 
 
     /*
-     * No results.
+     * NAVIGATIONAL / CURRENT SEARCH
+     *
+     * Show real results.
      */
 
-    if (!webResults.length) {
+    if (isRealSearch(query)) {
 
       return res.json({
 
         mode: "results",
 
-        count: "0",
+        count:
+          String(webResults.length),
 
         answer: "",
 
-        results: []
+        results:
+          webResults
 
       });
 
@@ -489,14 +620,12 @@ app.post("/api/search", async (req, res) => {
 
 
     /*
-     * QUESTIONS:
+     * EVERYTHING ELSE
      *
-     * ALWAYS TROLL.
-     *
-     * NEVER return sources.
+     * TROLL.
      */
 
-    if (isQuestion(query)) {
+    if (shouldTroll(query)) {
 
       try {
 
@@ -516,10 +645,9 @@ app.post("/api/search", async (req, res) => {
           answer,
 
           /*
-           * CRITICAL:
+           * VERY IMPORTANT:
            *
-           * Empty results means the frontend
-           * has nothing to display as Sources.
+           * No sources underneath the troll.
            */
 
           results: []
@@ -536,17 +664,24 @@ app.post("/api/search", async (req, res) => {
 
 
         /*
-         * Even if OpenAI fails, do NOT return
-         * a normal factual answer.
+         * DO NOT reveal the real search results
+         * when a troll answer fails.
          *
-         * Return an error instead of accidentally
-         * revealing the real answer through sources.
+         * Give a short fallback troll instead.
          */
 
-        return res.status(500).json({
+        return res.json({
 
-          error:
-            "TROOLLgel is temporarily too busy being ridiculous."
+          mode: "answer",
+
+          answerMode: "troll",
+
+          count: "0",
+
+          answer:
+            "TROOLLgel knows the answer, but it has temporarily misplaced it.",
+
+          results: []
 
         });
 
@@ -556,18 +691,7 @@ app.post("/api/search", async (req, res) => {
 
 
     /*
-     * NOT A QUESTION:
-     *
-     * This is a normal search.
-     *
-     * Examples:
-     *
-     * 10 best burgers in town
-     * 10 best vegan restaurants
-     * best restaurants Ljubljana
-     * football results
-     *
-     * These get the real search results.
+     * Final fallback.
      */
 
     return res.json({
