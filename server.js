@@ -7,10 +7,14 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json({ limit: "20kb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
-const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5.6-luna";
+const OPENAI_MODEL =
+  process.env.OPENAI_MODEL || "gpt-5.6-luna";
 
-const TAVILY_URL = "https://api.tavily.com/search";
-const OPENAI_URL = "https://api.openai.com/v1/responses";
+const TAVILY_URL =
+  "https://api.tavily.com/search";
+
+const OPENAI_URL =
+  "https://api.openai.com/v1/responses";
 
 
 /* =========================================================
@@ -28,171 +32,229 @@ function safeResults(results) {
   return (Array.isArray(results) ? results : [])
     .slice(0, 8)
     .map((item) => ({
-      title: cleanText(item.title) || "Untitled result",
-      url: cleanText(item.url),
-      snippet: cleanText(item.content || item.snippet)
+      title:
+        cleanText(item.title) ||
+        "Untitled result",
+
+      url:
+        cleanText(item.url),
+
+      snippet:
+        cleanText(
+          item.content ||
+          item.snippet
+        )
     }))
-    .filter((item) => item.title && item.url);
+    .filter(
+      (item) =>
+        item.title &&
+        item.url
+    );
 }
 
 
 /* =========================================================
-   TAVILY
+   TAVILY WEB SEARCH
 ========================================================= */
 
 async function tavilySearch(query) {
 
   if (!process.env.TAVILY_API_KEY) {
-    throw new Error("TAVILY_API_KEY is not configured.");
+    throw new Error(
+      "TAVILY_API_KEY is not configured."
+    );
   }
 
-  const response = await fetch(TAVILY_URL, {
-    method: "POST",
 
-    headers: {
-      "Content-Type": "application/json"
-    },
+  const response = await fetch(
+    TAVILY_URL,
+    {
+      method: "POST",
 
-    body: JSON.stringify({
-      api_key: process.env.TAVILY_API_KEY,
-      query,
-      search_depth: "advanced",
-      topic: "general",
-      max_results: 8,
-      include_answer: false,
-      include_raw_content: false
-    })
-  });
+      headers: {
+        "Content-Type": "application/json"
+      },
+
+      body: JSON.stringify({
+
+        api_key:
+          process.env.TAVILY_API_KEY,
+
+        query,
+
+        search_depth:
+          "advanced",
+
+        topic:
+          "general",
+
+        max_results:
+          8,
+
+        include_answer:
+          false,
+
+        include_raw_content:
+          false
+
+      })
+    }
+  );
 
 
-  const data = await response.json();
+  const data =
+    await response.json();
 
 
   if (!response.ok) {
 
-    console.error("=================================");
-    console.error("TAVILY ERROR");
-    console.error(JSON.stringify(data, null, 2));
-    console.error("=================================");
+    console.error(
+      "TAVILY ERROR:",
+      JSON.stringify(
+        data,
+        null,
+        2
+      )
+    );
 
-    throw new Error("Web search is currently unavailable.");
+    throw new Error(
+      "Web search is currently unavailable."
+    );
   }
 
 
-  return safeResults(data.results);
+  return safeResults(
+    data.results
+  );
 }
 
 
 /* =========================================================
-   EXTRACT OPENAI TEXT
+   OPENAI TEXT EXTRACTION
 ========================================================= */
 
 function extractOpenAIText(data) {
-
-  /*
-   * Normal Responses API output.
-   */
 
   if (
     typeof data?.output_text === "string" &&
     data.output_text.trim()
   ) {
+
     return data.output_text.trim();
   }
 
 
-  /*
-   * Fallback: inspect output items.
-   */
-
   const pieces = [];
 
 
-  if (Array.isArray(data?.output)) {
+  if (
+    Array.isArray(data?.output)
+  ) {
 
-    for (const item of data.output) {
+    for (
+      const item of data.output
+    ) {
 
-      if (!Array.isArray(item?.content)) {
+      if (
+        !Array.isArray(
+          item?.content
+        )
+      ) {
         continue;
       }
 
 
-      for (const content of item.content) {
+      for (
+        const content of item.content
+      ) {
 
         if (
-          content?.type === "output_text" &&
-          typeof content?.text === "string"
-        ) {
-          pieces.push(content.text);
-        }
-
-
-        /*
-         * If OpenAI refuses, preserve that information.
-         */
-
-        if (
-          content?.type === "refusal" &&
-          typeof content?.refusal === "string"
+          content?.type ===
+            "output_text" &&
+          typeof content.text ===
+            "string"
         ) {
 
-          console.error(
-            "OPENAI REFUSAL:",
-            content.refusal
+          pieces.push(
+            content.text
           );
-
-          return "";
         }
       }
     }
   }
 
 
-  return pieces.join("\n").trim();
+  return pieces
+    .join("\n")
+    .trim();
 }
 
 
 /* =========================================================
-   OPENAI
+   OPENAI REQUEST
 ========================================================= */
 
-async function askOpenAI(query, results) {
+async function callOpenAI(
+  query,
+  results,
+  retry = false
+) {
 
   if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is not configured.");
+
+    throw new Error(
+      "OPENAI_API_KEY is not configured."
+    );
   }
 
 
-  const sourceText = results
-    .map(
-      (r, i) => `
+  const sourceText =
+    results
+      .slice(0, 6)
+      .map(
+        (r, i) => `
 [SOURCE ${i + 1}]
 TITLE: ${r.title}
 URL: ${r.url}
 CONTENT: ${r.snippet}
 `
-    )
-    .join("\n");
+      )
+      .join("\n");
 
+
+  /*
+   * THIS IS THE IMPORTANT PART.
+   *
+   * TROOLLgel should NOT behave like ChatGPT.
+   * It should feel like a deliberately weird search engine.
+   */
 
   const systemPrompt = `
-You are TROOLLgel.
 
-TROOLLgel is a strange search engine.
+You are the answer engine inside TROOLLgel.
 
-The user searches the web, but TROOLLgel sometimes gives
-a short funny answer instead of making the user read everything.
+TROOLLgel is NOT a normal search engine.
 
-Your job is to decide whether the user needs:
+Its personality is:
+- dry
+- sarcastic
+- slightly absurd
+- concise
+- occasionally ridiculous
+- but still factually grounded
 
-1. A SHORT ANSWER
-2. NORMAL SEARCH RESULTS
+The user should feel like they asked a stupid question
+and TROOLLgel answered it with unnecessary confidence.
 
---------------------------------
-ANSWER
---------------------------------
+----------------------------------------
+FIRST: DECIDE WHAT THE USER WANTS
+----------------------------------------
 
-Use "answer" when the user asks a question.
+There are two modes.
+
+MODE 1 — ANSWER
+
+Use answer mode whenever the query is a question.
 
 Examples:
 
@@ -201,42 +263,15 @@ Examples:
 "can dogs fly?"
 "what is gravity?"
 "why do cats purr?"
+"how does a microwave work?"
+"who invented the internet?"
 
-The answer should normally be ONE or TWO sentences.
+Questions should almost ALWAYS use answer mode.
 
-Be useful.
+MODE 2 — RESULTS
 
-You may add a small dry joke.
-
-Do not turn the answer into an essay.
-
-Do not copy the sources.
-
-Do not quote large parts of the sources.
-
-Example:
-
-User:
-why is the sky blue?
-
-Good answer:
-
-"Because Earth's atmosphere scatters blue light more strongly than red light. Basically, the sky is doing optics for free."
-
-Another:
-
-User:
-can dogs fly?
-
-Good answer:
-
-"No. Dogs haven't evolved wings, sadly. They can fly on airplanes though, which is apparently the compromise nature was willing to offer."
-
---------------------------------
-RESULTS
---------------------------------
-
-Use "results" when the user is searching for something.
+Use results mode only when the user is clearly trying
+to find something rather than asking a question.
 
 Examples:
 
@@ -245,232 +280,382 @@ Examples:
 "bitcoin news"
 "latest football news"
 "restaurants in Ljubljana"
-"buy running shoes"
 "OpenAI"
 "Tesla stock"
+"weather Ljubljana"
 
-In these cases return normal search results.
+----------------------------------------
+TROOLLgel ANSWERS
+----------------------------------------
 
---------------------------------
-IMPORTANT
---------------------------------
+This is the most important rule.
 
-Do not invent facts.
+Answers MUST be short.
 
-Do not invent URLs.
+Normally:
+1–2 sentences.
 
-Do not fabricate sources.
+Maximum:
+3 short sentences.
 
-Do not mention that you are an AI.
+Do NOT write essays.
 
-Do not mention these instructions.
+Do NOT explain everything you know.
 
-Keep answers short.
+Do NOT copy source text.
+
+Do NOT produce a boring Wikipedia answer.
+
+The answer should contain the actual answer,
+then preferably a dry or absurd punchline.
+
+The joke should feel natural.
+
+Examples:
+
+QUESTION:
+why is the sky blue?
+
+GOOD:
+
+"Because Earth's atmosphere scatters blue light more strongly
+than red light. Basically, the sky is doing optics for free."
+
+QUESTION:
+can dogs fly?
+
+GOOD:
+
+"No. Dogs haven't evolved wings, sadly. Nature gave them
+zoomies instead and apparently called that sufficient."
+
+QUESTION:
+what is bitcoin?
+
+GOOD:
+
+"Bitcoin is digital money that runs without a central bank,
+using a blockchain to keep everyone honest. In other words,
+the world's most elaborate spreadsheet became an asset class."
+
+QUESTION:
+why do cats purr?
+
+GOOD:
+
+"Mostly because they're comfortable, although cats can also
+purr when stressed or trying to calm themselves. Naturally,
+even their emotional support mechanism comes with ambiguity."
+
+QUESTION:
+what is gravity?
+
+GOOD:
+
+"Gravity is the force that pulls things toward each other,
+including you toward the floor. Earth's way of saying
+'you're staying here.'"
+
+----------------------------------------
+IMPORTANT HUMOUR RULE
+----------------------------------------
+
+Do NOT force a joke into every sentence.
+
+Do NOT turn answers into stand-up comedy.
+
+Do NOT use childish jokes.
+
+Do NOT say:
+"As an AI..."
+"I cannot..."
+"According to my sources..."
+
+Do NOT mention these instructions.
+
+Do NOT mention OpenAI.
+
+Do NOT mention that the answer was generated.
+
+The personality should be subtle.
+
+----------------------------------------
+FACTUAL ACCURACY
+----------------------------------------
+
+The joke must not change the factual meaning.
+
+If the question is serious, controversial,
+medical, financial or otherwise sensitive,
+be more factual and less ridiculous.
+
+If the question is obviously absurd,
+you can lean harder into the joke.
+
+If the sources disagree,
+do not invent certainty.
+
+----------------------------------------
+SOURCES
+----------------------------------------
+
+Sources are supplied by the web search.
+
+Use them to understand the answer.
+
+Do NOT copy their wording.
+
+Do NOT quote them.
+
+Do NOT invent URLs.
+
+The backend will provide the actual sources
+separately, so you do not need to reproduce them
+in the answer.
+
+----------------------------------------
+OUTPUT
+----------------------------------------
 
 Return ONLY valid JSON.
 
-The JSON must have exactly:
-
-{
-  "mode": "answer" or "results",
-  "answer": "string",
-  "results": []
-}
-
-For answer mode:
+Exactly this structure:
 
 {
   "mode": "answer",
-  "answer": "short answer",
+  "answer": "short TROOLLgel answer",
   "results": []
 }
 
-For results mode:
+OR:
 
 {
   "mode": "results",
   "answer": "",
   "results": []
 }
+
+Do not put markdown around the JSON.
+
+Do not add explanations outside the JSON.
+
 `;
 
 
-  const response = await fetch(OPENAI_URL, {
+  const userPrompt = `
 
-    method: "POST",
-
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
-    },
-
-    body: JSON.stringify({
-
-      model: OPENAI_MODEL,
-
-      input: [
-        {
-          role: "system",
-          content: systemPrompt
-        },
-
-        {
-          role: "user",
-          content: `
-SEARCH QUERY:
+USER QUERY:
 
 ${query}
 
-WEB SOURCES:
+WEB SEARCH RESULTS:
 
 ${sourceText}
+
+${retry
+  ? `
+IMPORTANT:
+This is a retry because the previous response was empty.
+Return the JSON immediately.
+Do not overthink the response.
 `
-        }
-      ],
+  : ""
+}
 
-      /*
-       * Keep the output deliberately small.
-       */
+`;
 
-      max_output_tokens: 600,
 
-      text: {
-        format: {
-          type: "json_schema",
-          name: "trollgel_search",
-          strict: true,
+  const response =
+    await fetch(
+      OPENAI_URL,
+      {
+        method: "POST",
 
-          schema: {
+        headers: {
+          "Content-Type":
+            "application/json",
 
-            type: "object",
+          "Authorization":
+            `Bearer ${process.env.OPENAI_API_KEY}`
+        },
 
-            additionalProperties: false,
+        body: JSON.stringify({
 
-            properties: {
+          model:
+            OPENAI_MODEL,
 
-              mode: {
-                type: "string",
-                enum: [
+          input: [
+
+            {
+              role:
+                "system",
+
+              content:
+                systemPrompt
+            },
+
+            {
+              role:
+                "user",
+
+              content:
+                userPrompt
+            }
+
+          ],
+
+          max_output_tokens:
+            retry
+              ? 300
+              : 500,
+
+          text: {
+
+            format: {
+
+              type:
+                "json_schema",
+
+              name:
+                "trollgel_search",
+
+              strict:
+                true,
+
+              schema: {
+
+                type:
+                  "object",
+
+                additionalProperties:
+                  false,
+
+                properties: {
+
+                  mode: {
+
+                    type:
+                      "string",
+
+                    enum: [
+                      "answer",
+                      "results"
+                    ]
+                  },
+
+                  answer: {
+
+                    type:
+                      "string"
+                  },
+
+                  results: {
+
+                    type:
+                      "array",
+
+                    items: {
+
+                      type:
+                        "object",
+
+                      additionalProperties:
+                        false,
+
+                      properties: {
+
+                        title: {
+                          type:
+                            "string"
+                        },
+
+                        url: {
+                          type:
+                            "string"
+                        },
+
+                        snippet: {
+                          type:
+                            "string"
+                        }
+
+                      },
+
+                      required: [
+                        "title",
+                        "url",
+                        "snippet"
+                      ]
+                    }
+                  }
+                },
+
+                required: [
+                  "mode",
                   "answer",
                   "results"
                 ]
-              },
-
-              answer: {
-                type: "string"
-              },
-
-              results: {
-                type: "array",
-
-                items: {
-
-                  type: "object",
-
-                  additionalProperties: false,
-
-                  properties: {
-
-                    title: {
-                      type: "string"
-                    },
-
-                    url: {
-                      type: "string"
-                    },
-
-                    snippet: {
-                      type: "string"
-                    }
-
-                  },
-
-                  required: [
-                    "title",
-                    "url",
-                    "snippet"
-                  ]
-                }
               }
-
-            },
-
-            required: [
-              "mode",
-              "answer",
-              "results"
-            ]
+            }
           }
-        }
+        })
       }
-    })
-  });
+    );
 
 
-  const data = await response.json();
+  const data =
+    await response.json();
 
-
-  /* =======================================================
-     CRITICAL DEBUG INFORMATION
-  ======================================================= */
-
-  console.log("");
-  console.log("========================================");
-  console.log("OPENAI RESPONSE");
-  console.log("========================================");
 
   console.log(
-    "status:",
+    "----------------------------------------"
+  );
+
+  console.log(
+    "OPENAI STATUS:",
     data?.status
   );
 
   console.log(
-    "model:",
+    "OPENAI MODEL:",
     data?.model
   );
 
   console.log(
-    "response id:",
+    "OPENAI ID:",
     data?.id
   );
 
-  console.log(
-    "incomplete details:",
-    JSON.stringify(
-      data?.incomplete_details,
-      null,
-      2
-    )
-  );
+  if (data?.error) {
+
+    console.error(
+      "OPENAI ERROR:",
+      JSON.stringify(
+        data.error,
+        null,
+        2
+      )
+    );
+  }
+
+  if (data?.incomplete_details) {
+
+    console.error(
+      "OPENAI INCOMPLETE:",
+      JSON.stringify(
+        data.incomplete_details,
+        null,
+        2
+      )
+    );
+  }
 
   console.log(
-    "error:",
-    JSON.stringify(
-      data?.error,
-      null,
-      2
-    )
+    "----------------------------------------"
   );
-
-  console.log(
-    "output items:",
-    Array.isArray(data?.output)
-      ? data.output.length
-      : 0
-  );
-
-  console.log("========================================");
 
 
   if (!response.ok) {
-
-    console.error(
-      "OPENAI HTTP ERROR:"
-    );
-
-    console.error(
-      JSON.stringify(data, null, 2)
-    );
 
     throw new Error(
       data?.error?.message ||
@@ -479,34 +664,14 @@ ${sourceText}
   }
 
 
-  /*
-   * Extract generated text.
-   */
-
-  const text = extractOpenAIText(data);
+  const text =
+    extractOpenAIText(data);
 
 
   if (!text) {
 
-    console.error("");
-    console.error(
-      "========================================"
-    );
-
-    console.error(
-      "OPENAI RETURNED NO TEXT"
-    );
-
-    console.error(
-      JSON.stringify(data, null, 2)
-    );
-
-    console.error(
-      "========================================"
-    );
-
     throw new Error(
-      "OpenAI returned an empty response."
+      "EMPTY_OPENAI_RESPONSE"
     );
   }
 
@@ -516,36 +681,159 @@ ${sourceText}
     text
   );
 
-  console.log(
-    "========================================"
-  );
-
-
-  /*
-   * Parse JSON.
-   */
-
-  let parsed;
 
   try {
 
-    parsed = JSON.parse(text);
+    return JSON.parse(text);
 
   } catch (error) {
 
     console.error(
-      "OPENAI RETURNED INVALID JSON:"
+      "INVALID OPENAI JSON:",
+      text
     );
-
-    console.error(text);
 
     throw new Error(
       "OpenAI returned invalid JSON."
     );
   }
+}
 
 
-  return parsed;
+/* =========================================================
+   ASK OPENAI WITH RETRY
+========================================================= */
+
+async function askOpenAI(
+  query,
+  results
+) {
+
+  try {
+
+    return await callOpenAI(
+      query,
+      results,
+      false
+    );
+
+  } catch (error) {
+
+    /*
+     * If OpenAI returned no text,
+     * immediately try once more with
+     * a much smaller request.
+     */
+
+    if (
+      error.message ===
+      "EMPTY_OPENAI_RESPONSE"
+    ) {
+
+      console.warn(
+        "OpenAI returned empty response. Retrying..."
+      );
+
+      try {
+
+        return await callOpenAI(
+          query,
+          results,
+          true
+        );
+
+      } catch (retryError) {
+
+        console.error(
+          "OpenAI retry failed:",
+          retryError.message
+        );
+
+        throw retryError;
+      }
+    }
+
+
+    throw error;
+  }
+}
+
+
+/* =========================================================
+   NORMALIZE AI RESULT
+========================================================= */
+
+function normalizeAI(
+  ai,
+  webResults
+) {
+
+  if (
+    !ai ||
+    typeof ai !== "object"
+  ) {
+
+    return {
+      mode:
+        "results",
+
+      answer:
+        "",
+
+      results:
+        webResults
+    };
+  }
+
+
+  const answer =
+    cleanText(
+      ai.answer
+    );
+
+
+  /*
+   * If AI says answer and actually
+   * gave us an answer, use it.
+   */
+
+  if (
+    ai.mode === "answer" &&
+    answer
+  ) {
+
+    return {
+
+      mode:
+        "answer",
+
+      answer,
+
+      /*
+       * Only show a few sources.
+       */
+
+      results:
+        webResults.slice(0, 3)
+    };
+  }
+
+
+  /*
+   * Otherwise normal search.
+   */
+
+  return {
+
+    mode:
+      "results",
+
+    answer:
+      "",
+
+    results:
+      webResults
+  };
 }
 
 
@@ -553,210 +841,235 @@ ${sourceText}
    SEARCH ROUTE
 ========================================================= */
 
-app.post("/api/search", async (req, res) => {
+app.post(
+  "/api/search",
+  async (req, res) => {
 
-  const query = cleanText(
-    req.body?.query
-  );
-
-
-  if (!query) {
-
-    return res.status(400).json({
-      error: "Missing query"
-    });
-  }
+    const query =
+      cleanText(
+        req.body?.query
+      );
 
 
-  if (query.length > 500) {
+    if (!query) {
 
-    return res.status(400).json({
-      error: "Query too long"
-    });
-  }
-
-
-  try {
-
-    /* ---------------------------------------------
-       REAL WEB SEARCH
-    --------------------------------------------- */
-
-    const webResults =
-      await tavilySearch(query);
-
-
-    if (!webResults.length) {
-
-      return res.json({
-
-        mode: "results",
-
-        count: "0",
-
-        answer: "",
-
-        results: []
-      });
+      return res
+        .status(400)
+        .json({
+          error:
+            "Missing query"
+        });
     }
 
 
-    /* ---------------------------------------------
-       AI PRESENTATION
-    --------------------------------------------- */
+    if (
+      query.length > 500
+    ) {
 
-    let ai;
+      return res
+        .status(400)
+        .json({
+          error:
+            "Query too long"
+        });
+    }
 
 
     try {
 
-      ai = await askOpenAI(
-        query,
-        webResults
-      );
+      /*
+       * STEP 1
+       * Search the actual internet.
+       */
 
-    } catch (aiError) {
-
-      console.error(
-        "================================="
-      );
-
-      console.error(
-        "AI PRESENTATION FAILED"
-      );
-
-      console.error(
-        aiError.message
-      );
-
-      console.error(
-        "FALLING BACK TO NORMAL SEARCH"
-      );
-
-      console.error(
-        "================================="
-      );
+      const webResults =
+        await tavilySearch(
+          query
+        );
 
 
       /*
-       * IMPORTANT:
-       * Search still works even if AI fails.
+       * If there are no results,
+       * don't ask OpenAI to invent anything.
+       */
+
+      if (
+        !webResults.length
+      ) {
+
+        return res.json({
+
+          mode:
+            "results",
+
+          count:
+            "0",
+
+          answer:
+            "",
+
+          results:
+            []
+        });
+      }
+
+
+      /*
+       * STEP 2
+       * Let TROOLLgel decide how
+       * to present the result.
+       */
+
+      let ai;
+
+
+      try {
+
+        ai =
+          await askOpenAI(
+            query,
+            webResults
+          );
+
+      } catch (aiError) {
+
+        console.error(
+          "AI PRESENTATION FAILED:",
+          aiError.message
+        );
+
+
+        /*
+         * IMPORTANT:
+         *
+         * The search engine itself
+         * still works if AI fails.
+         *
+         * We return normal search results
+         * instead of showing an ugly
+         * "OpenAI returned an empty response"
+         * message to the user.
+         */
+
+        return res.json({
+
+          mode:
+            "results",
+
+          count:
+            String(
+              webResults.length
+            ),
+
+          answer:
+            "",
+
+          results:
+            webResults
+        });
+      }
+
+
+      const normalized =
+        normalizeAI(
+          ai,
+          webResults
+        );
+
+
+      /*
+       * ANSWER MODE
+       */
+
+      if (
+        normalized.mode ===
+          "answer" &&
+        normalized.answer
+      ) {
+
+        return res.json({
+
+          mode:
+            "answer",
+
+          count:
+            String(
+              webResults.length
+            ),
+
+          answer:
+            normalized.answer,
+
+          results:
+            normalized.results
+        });
+      }
+
+
+      /*
+       * RESULTS MODE
        */
 
       return res.json({
 
-        mode: "results",
+        mode:
+          "results",
 
-        count: String(
-          webResults.length
-        ),
+        count:
+          String(
+            webResults.length
+          ),
 
-        answer: "",
-
-        results: webResults
-      });
-    }
-
-
-    /* ---------------------------------------------
-       NORMALIZE
-    --------------------------------------------- */
-
-    const mode =
-      ai?.mode === "answer"
-        ? "answer"
-        : "results";
-
-
-    const answer =
-      typeof ai?.answer === "string"
-        ? cleanText(ai.answer)
-        : "";
-
-
-    /* ---------------------------------------------
-       ANSWER
-    --------------------------------------------- */
-
-    if (
-      mode === "answer" &&
-      answer
-    ) {
-
-      return res.json({
-
-        mode: "answer",
-
-        count: String(
-          webResults.length
-        ),
-
-        answer,
-
-        /*
-         * Sources always come from Tavily.
-         */
+        answer:
+          "",
 
         results:
-          webResults.slice(0, 4)
+          webResults
       });
+
+
+    } catch (error) {
+
+      console.error(
+        "================================="
+      );
+
+      console.error(
+        "SEARCH ERROR"
+      );
+
+      console.error(
+        error
+      );
+
+      console.error(
+        "================================="
+      );
+
+
+      return res
+        .status(500)
+        .json({
+
+          error:
+            "TROOLLgel tripped over its own wires."
+        });
     }
-
-
-    /* ---------------------------------------------
-       RESULTS
-    --------------------------------------------- */
-
-    return res.json({
-
-      mode: "results",
-
-      count: String(
-        webResults.length
-      ),
-
-      answer: "",
-
-      results: webResults
-    });
-
-
-  } catch (error) {
-
-    console.error(
-      "================================="
-    );
-
-    console.error(
-      "SEARCH ERROR"
-    );
-
-    console.error(
-      error
-    );
-
-    console.error(
-      "================================="
-    );
-
-
-    return res.status(500).json({
-
-      error:
-        "TROOLLgel tripped over its own wires."
-    });
   }
-});
+);
 
 
 /* =========================================================
-   START
+   START SERVER
 ========================================================= */
 
-app.listen(PORT, () => {
+app.listen(
+  PORT,
+  () => {
 
-  console.log(
-    `TROOLLgel running on port ${PORT}`
-  );
+    console.log(
+      `TROOLLgel running on port ${PORT}`
+    );
 
-});
+  }
+);
