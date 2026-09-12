@@ -21,6 +21,7 @@ function cleanText(value) {
 
 
 function safeResults(results) {
+
   return (Array.isArray(results) ? results : [])
     .slice(0, 8)
     .map(item => ({
@@ -29,6 +30,7 @@ function safeResults(results) {
       snippet: cleanText(item?.content || item?.snippet)
     }))
     .filter(item => item.title && item.url);
+
 }
 
 
@@ -82,20 +84,167 @@ async function tavilySearch(query) {
   }
 
   return safeResults(data.results);
+
 }
 
 
 /*
- * TROOLLgel answer generator.
+ * Decide whether a query should receive a TROOLLgel
+ * joke or a normal real-world search.
  *
- * IMPORTANT:
- * TROOLLgel is a parody search engine.
+ * Simple curiosity questions -> TROOLLgel
  *
- * For normal harmless questions, the answer should
- * deliberately NOT be the normal factual answer.
- *
- * The web results are background material only.
- * They must NEVER be copied into the answer.
+ * Recommendations, places, products, current events,
+ * advice and practical searches -> normal search.
+ */
+
+function isTrollQuestion(query) {
+
+  const q = cleanText(query).toLowerCase();
+
+  if (!q) {
+    return false;
+  }
+
+
+  /*
+   * These searches MUST remain normal searches.
+   */
+
+  const normalSearchPatterns = [
+
+    /*
+     * Lists and rankings
+     */
+
+    /\b\d+\s+(best|top|greatest|worst)\b/,
+    /\b(best|top|greatest|worst)\s+\d+\b/,
+
+    /*
+     * Restaurants, food and places
+     */
+
+    /\b(best|top)\b.*\b(restaurants?|burgers?|pizza|hotels?|bars?|cafes?|places?)\b/,
+
+    /\b(vegan|vegetarian|gluten[- ]free|halal|kosher)\b.*\b(restaurants?|places?|food)\b/,
+
+    /\b(restaurants?|hotels?|bars?|cafes?|burgers?|pizza)\b.*\b(near me|in|near|around)\b/,
+
+    /\b(best|top)\b.*\b(restaurants?|hotels?|bars?|cafes?)\b/,
+
+    /*
+     * Finding / recommendations
+     */
+
+    /\b(where can i|where to|find me|show me)\b/,
+
+    /\b(recommend|recommendation|recommendations|suggest|suggestions)\b/,
+
+    /*
+     * Current information
+     */
+
+    /\b(latest|today|current|recent|news|now)\b/,
+
+    /*
+     * Shopping / buying / booking
+     */
+
+    /\b(buy|purchase|order|book|reserve|reservation)\b/,
+
+    /\b(price|prices|cost|cheap|cheapest|affordable)\b/,
+
+    /*
+     * Travel
+     */
+
+    /\b(flights?|hotels?|trips?|vacations?|holiday|travel)\b/,
+
+    /*
+     * Practical advice where the user wants a real answer
+     */
+
+    /\b(how can i|how do i)\b.*\b(lose weight|make money|invest|buy|find|book|get|learn|start|cook|fix|repair)\b/,
+
+    /*
+     * Financial / crypto searches
+     */
+
+    /\b(stock|stocks|bitcoin|crypto|cryptocurrency|market|shares)\b/,
+
+    /*
+     * Specific products / services
+     */
+
+    /\b(best)\b.*\b(laptop|phone|car|camera|shoes|tv|computer|product)\b/,
+
+    /*
+     * Location searches
+     */
+
+    /\b(near me|in ljubljana|in maribor|in slovenia)\b/
+
+  ];
+
+
+  /*
+   * If the query looks like a real search,
+   * never send it to TROOLLgel.
+   */
+
+  if (
+    normalSearchPatterns.some(
+      pattern => pattern.test(q)
+    )
+  ) {
+    return false;
+  }
+
+
+  /*
+   * Simple curiosity questions are TROOLLgel territory.
+   */
+
+  const trollStarters = [
+
+    "why ",
+    "what is ",
+    "what are ",
+    "can ",
+    "could ",
+    "does ",
+    "do ",
+    "is ",
+    "are ",
+    "how do ",
+    "how does ",
+    "why does ",
+    "why do "
+
+  ];
+
+
+  /*
+   * Explicit question mark + curiosity wording.
+   */
+
+  if (
+    q.endsWith("?") &&
+    trollStarters.some(
+      start => q.startsWith(start)
+    )
+  ) {
+    return true;
+  }
+
+
+  return false;
+
+}
+
+
+/*
+ * Generate the actual TROOLLgel answer.
  */
 
 async function trollAnswer(query, webResults) {
@@ -108,9 +257,11 @@ async function trollAnswer(query, webResults) {
   const sources = webResults
     .slice(0, 5)
     .map((r, i) => `
+
 SOURCE ${i + 1}
 TITLE: ${r.title}
 CONTENT: ${r.snippet}
+
 `)
     .join("\n");
 
@@ -121,13 +272,13 @@ You are TROOLLgel.
 
 TROOLLgel is a parody search engine.
 
-Your job is NOT to behave like ChatGPT.
+You are NOT a normal search assistant.
 
-For ordinary, harmless questions, give a short,
-confident, funny, deliberately wrong or absurd answer.
+For ordinary harmless curiosity questions,
+your job is to give a short, confident, funny,
+deliberately wrong or absurd answer.
 
-The humor should come from confidently answering the
-question incorrectly.
+The joke should come from the answer itself.
 
 CRITICAL RULE:
 
@@ -137,34 +288,46 @@ DO NOT give a factual answer with a funny twist.
 
 DO NOT explain the real answer first.
 
-DO NOT hedge with "technically", "actually", "however",
-"usually", "in reality", or similar wording.
+DO NOT hedge.
 
-The answer should feel like TROOLLgel genuinely believes
-its ridiculous answer.
+DO NOT say "technically".
 
-Think:
+DO NOT say "actually".
 
-NORMAL QUESTION
-+
-CONFIDENTLY WRONG ANSWER
-=
-TROOLLgel
+DO NOT say "however".
 
-Examples:
+DO NOT correct yourself.
+
+DO NOT give a normal answer followed by a joke.
+
+Instead, confidently commit to a ridiculous explanation.
+
+The user should immediately understand that
+TROOLLgel is joking.
+
+STYLE:
+
+- dry
+- deadpan
+- confident
+- clever
+- unexpected
+- short
+- absurd
+- conversational
+
+Normally use ONE sentence.
+
+Maximum TWO short sentences.
+
+Examples of the STYLE:
 
 Question: can dogs fly?
 
-Bad:
-"Yes, dogs can fly on planes, with a funny comment."
-
 Good:
-"No. Dogs were offered wings during evolution, but they chose zoomies instead."
+"No. Dogs skipped the wing upgrade and got zoomies instead."
 
 Question: why is the sky blue?
-
-Bad:
-"Because the atmosphere scatters blue light, with a funny comment."
 
 Good:
 "Because blue was available in bulk and the sky had the largest order."
@@ -214,55 +377,24 @@ Question: how do I become a millionaire?
 Good:
 "Start by becoming a billionaire and make several extremely confident decisions."
 
-STYLE:
-
-- Dry
-- Deadpan
-- Confident
-- Clever
-- Unexpected
-- Short
-- Internet-humor style
-- No essay
-- No explanation of reasoning
-
-Normally use 1 sentence.
-
-Maximum 2 short sentences.
-
 IMPORTANT:
 
-The answer should generally contain a clear absurd premise,
-misunderstanding, fake explanation, or ridiculous conclusion.
+These examples are only style references.
 
-Do NOT simply say "No" or "Yes" and then give the real answer.
+Do NOT reuse them word-for-word unless
+the user asks exactly the same question.
 
-For example, instead of:
+Create a fresh joke every time.
 
-"No, dogs can't fly."
-
-prefer:
-
-"No. Dogs skipped the wing upgrade and got zoomies instead."
-
-For questions where the obvious factual answer is extremely
-simple, invent a funny explanation rather than merely reversing
-yes/no.
-
-Do NOT reuse the examples verbatim unless the user asks exactly
-the same question.
-
-Vary the wording and humor.
-
-REAL WEB RESULTS ARE PROVIDED ONLY AS BACKGROUND.
+REAL WEB RESULTS ARE PROVIDED BELOW ONLY AS BACKGROUND.
 
 Use them only to understand what the question is about.
 
-NEVER mention the sources.
+NEVER mention the web results.
 
 NEVER list sources.
 
-NEVER quote the sources.
+NEVER quote sources.
 
 NEVER say "according to sources".
 
@@ -270,18 +402,18 @@ NEVER mention AI, OpenAI, prompts, instructions or models.
 
 NEVER write markdown.
 
-NEVER start with "Sure", "Here is", "According to", or similar.
+NEVER write an essay.
+
+NEVER explain your reasoning.
 
 SAFETY:
 
 For medical, self-harm, dangerous, criminal, weapons,
 hate, personal-data, or high-stakes financial questions,
-do NOT deliberately give dangerous misinformation.
+stay factual and safe instead of deliberately misleading.
 
-For those topics, stay factual, concise and safe.
-
-For all ordinary harmless questions, prioritize the
-TROOLLgel joke over factual correctness.
+For ordinary harmless curiosity questions,
+prioritize the TROOLLgel joke.
 
 USER QUESTION:
 ${query}
@@ -313,7 +445,7 @@ ${sources}
       input:
         `USER QUESTION:\n${query}\n\nWEB RESULTS:\n${sources}`,
 
-      max_output_tokens: 800
+      max_output_tokens: 300
 
     })
 
@@ -356,8 +488,7 @@ ${sources}
     typeof data?.output_text === "string"
   ) {
 
-    text =
-      data.output_text.trim();
+    text = data.output_text.trim();
 
   }
 
@@ -413,61 +544,6 @@ ${sources}
 }
 
 
-/*
- * Determine whether the user is asking a question.
- */
-
-function isQuestion(query) {
-
-  const q =
-    cleanText(query).toLowerCase();
-
-
-  if (!q) return false;
-
-
-  if (q.endsWith("?")) {
-    return true;
-  }
-
-
-  const starters = [
-
-    "what ",
-    "why ",
-    "how ",
-    "when ",
-    "where ",
-    "who ",
-    "which ",
-    "can ",
-    "could ",
-    "would ",
-    "should ",
-    "is ",
-    "are ",
-    "do ",
-    "does ",
-    "did ",
-    "will ",
-    "has ",
-    "have ",
-    "am ",
-    "was ",
-    "were ",
-    "tell me ",
-    "explain "
-
-  ];
-
-
-  return starters.some(
-    start => q.startsWith(start)
-  );
-
-}
-
-
 app.post("/api/search", async (req, res) => {
 
   const query =
@@ -495,8 +571,7 @@ app.post("/api/search", async (req, res) => {
   try {
 
     /*
-     * STEP 1
-     * Real web search.
+     * First perform the real web search.
      */
 
     const webResults =
@@ -521,13 +596,15 @@ app.post("/api/search", async (req, res) => {
 
 
     /*
-     * STEP 2
+     * Curiosity question:
+     * show TROOLLgel answer ONLY.
      *
-     * Questions get a TROOLLgel answer.
-     * Normal searches get normal search results.
+     * IMPORTANT:
+     * results are deliberately empty so the real
+     * sources cannot appear underneath the joke.
      */
 
-    if (isQuestion(query)) {
+    if (isTrollQuestion(query)) {
 
       try {
 
@@ -547,12 +624,6 @@ app.post("/api/search", async (req, res) => {
 
           answer,
 
-          /*
-           * Keep results available internally/API-side,
-           * but the frontend should NOT display them
-           * underneath a TROOLLgel answer.
-           */
-
           results: []
 
         });
@@ -565,6 +636,11 @@ app.post("/api/search", async (req, res) => {
           error.message
         );
 
+
+        /*
+         * If AI fails, fall back to normal search.
+         * Never show an ugly OpenAI error to the visitor.
+         */
 
         return res.json({
 
@@ -585,7 +661,8 @@ app.post("/api/search", async (req, res) => {
 
 
     /*
-     * Normal search query.
+     * Real search:
+     * show the actual results.
      */
 
     return res.json({
