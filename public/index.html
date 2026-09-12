@@ -1,343 +1,996 @@
-<script>
-document.addEventListener("DOMContentLoaded", () => {
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  const home = document.getElementById("home");
-  const results = document.getElementById("results");
-  const list = document.getElementById("list");
+  <title>TROOLLgel</title>
 
-  const homeQuery = document.getElementById("homeQuery");
-  const resultQuery = document.getElementById("resultQuery");
-  const count = document.getElementById("count");
-  const note = document.getElementById("search-note");
-
-  const homeForm = document.getElementById("homeForm");
-  const resultForm = document.getElementById("resultForm");
-  const logoBack = document.getElementById("logoBack");
-  const again = document.getElementById("again");
-
-  function esc(value) {
-    return String(value ?? "").replace(/[&<>"']/g, char => ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;"
-    }[char]));
-  }
-
-  function showHome() {
-    if (results) results.style.display = "none";
-    if (home) home.style.display = "flex";
-
-    if (homeQuery) {
-      homeQuery.focus();
+  <style>
+    * {
+      box-sizing: border-box;
     }
 
-    window.scrollTo(0, 0);
-  }
-
-  function showResults() {
-    if (home) home.style.display = "none";
-    if (results) results.style.display = "block";
-
-    window.scrollTo(0, 0);
-  }
-
-  function renderResults(data) {
-
-    if (!data || typeof data !== "object") {
-      throw new Error("Invalid response from server.");
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      font-family: Arial, Helvetica, sans-serif;
+      color: #202124;
+      background: #fff;
     }
 
-    if (!list) {
-      throw new Error("Results container not found.");
+    body {
+      min-height: 100vh;
     }
 
-    if (data.mode === "answer" && data.answer) {
+    button,
+    input {
+      font-family: inherit;
+    }
 
-      if (count) {
-        count.textContent =
-          "About " + (data.count || "a suspicious number") + " results";
+    a {
+      text-decoration: none;
+    }
+
+    /* =========================
+       HOME
+       ========================= */
+
+    #home {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .home-main {
+      width: 100%;
+      max-width: 760px;
+      padding: 0 24px;
+      margin-top: 190px;
+      text-align: center;
+    }
+
+    .logo {
+      font-size: 58px;
+      font-weight: 500;
+      letter-spacing: -4px;
+      margin-bottom: 34px;
+      user-select: none;
+    }
+
+    .logo .t {
+      color: #4285f4;
+    }
+
+    .logo .r {
+      color: #ea4335;
+    }
+
+    .logo .o1 {
+      color: #fbbc05;
+    }
+
+    .logo .o2 {
+      color: #4285f4;
+    }
+
+    .logo .l {
+      color: #34a853;
+    }
+
+    .logo .g {
+      color: #ea4335;
+    }
+
+    .logo .e {
+      color: #4285f4;
+    }
+
+    .logo .small {
+      font-size: 0.72em;
+      letter-spacing: -3px;
+    }
+
+    .search-form {
+      width: 100%;
+    }
+
+    .search-box {
+      width: 100%;
+      height: 54px;
+      border: 1px solid #dfe1e5;
+      border-radius: 28px;
+      display: flex;
+      align-items: center;
+      padding: 0 18px;
+      background: #fff;
+      transition: box-shadow 0.15s ease;
+    }
+
+    .search-box:hover,
+    .search-box:focus-within {
+      box-shadow: 0 1px 6px rgba(32, 33, 36, 0.18);
+      border-color: rgba(223, 225, 229, 0);
+    }
+
+    .search-icon {
+      width: 20px;
+      height: 20px;
+      margin-right: 12px;
+      flex: 0 0 auto;
+      position: relative;
+    }
+
+    .search-icon::before {
+      content: "";
+      position: absolute;
+      width: 11px;
+      height: 11px;
+      border: 2px solid #9aa0a6;
+      border-radius: 50%;
+      left: 0;
+      top: 0;
+    }
+
+    .search-icon::after {
+      content: "";
+      position: absolute;
+      width: 8px;
+      height: 2px;
+      background: #9aa0a6;
+      transform: rotate(45deg);
+      left: 11px;
+      top: 13px;
+      border-radius: 2px;
+    }
+
+    .search-input {
+      flex: 1;
+      border: 0;
+      outline: 0;
+      font-size: 17px;
+      color: #202124;
+      background: transparent;
+      min-width: 0;
+    }
+
+    .search-input::placeholder {
+      color: #9aa0a6;
+    }
+
+    .search-submit {
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      color: #5f6368;
+      font-size: 14px;
+      padding: 8px;
+      border-radius: 4px;
+    }
+
+    .search-submit:hover {
+      background: #f1f3f4;
+    }
+
+    .home-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 28px;
+    }
+
+    .google-button {
+      background: #f8f9fa;
+      border: 1px solid #f8f9fa;
+      border-radius: 4px;
+      color: #3c4043;
+      font-size: 14px;
+      padding: 10px 18px;
+      cursor: pointer;
+    }
+
+    .google-button:hover {
+      border-color: #dadce0;
+      box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
+    }
+
+    .home-note {
+      margin-top: 34px;
+      color: #70757a;
+      font-size: 13px;
+    }
+
+    .home-note strong {
+      font-weight: 500;
+    }
+
+    /* =========================
+       RESULTS
+       ========================= */
+
+    #results {
+      display: none;
+      min-height: 100vh;
+    }
+
+    .topbar {
+      height: 74px;
+      border-bottom: 1px solid #f1f3f4;
+      display: flex;
+      align-items: center;
+      padding: 0 30px;
+      gap: 30px;
+      position: sticky;
+      top: 0;
+      background: rgba(255, 255, 255, 0.98);
+      z-index: 10;
+    }
+
+    .top-logo {
+      cursor: pointer;
+      font-size: 28px;
+      font-weight: 500;
+      letter-spacing: -2px;
+      white-space: nowrap;
+      user-select: none;
+    }
+
+    .top-search-form {
+      width: min(680px, 100%);
+    }
+
+    .top-search-box {
+      height: 46px;
+      width: 100%;
+      border: 1px solid #dfe1e5;
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      padding: 0 15px;
+      transition: box-shadow 0.15s ease;
+    }
+
+    .top-search-box:focus-within {
+      box-shadow: 0 1px 5px rgba(32, 33, 36, 0.15);
+    }
+
+    .top-search-input {
+      flex: 1;
+      border: 0;
+      outline: 0;
+      font-size: 16px;
+      color: #202124;
+      background: transparent;
+      min-width: 0;
+    }
+
+    .top-search-button {
+      border: 0;
+      background: transparent;
+      color: #4285f4;
+      cursor: pointer;
+      font-size: 16px;
+      padding: 7px 9px;
+    }
+
+    .results-layout {
+      margin-left: 180px;
+      width: min(760px, calc(100% - 220px));
+      padding: 25px 0 80px;
+    }
+
+    .results-meta {
+      color: #70757a;
+      font-size: 13px;
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+
+    .result {
+      margin-bottom: 30px;
+    }
+
+    .url {
+      color: #5f6368;
+      font-size: 13px;
+      line-height: 1.4;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 4px;
+    }
+
+    .title {
+      font-size: 20px;
+      line-height: 1.3;
+      margin-bottom: 5px;
+    }
+
+    .title a {
+      color: #1a0dab;
+    }
+
+    .title a:hover {
+      text-decoration: underline;
+    }
+
+    .snippet {
+      color: #4d5156;
+      font-size: 14px;
+      line-height: 1.55;
+      max-width: 680px;
+    }
+
+    /* =========================
+       AI ANSWER
+       ========================= */
+
+    .answer-box {
+      margin: 4px 0 34px;
+      padding: 0;
+    }
+
+    .answer-label {
+      color: #5f6368;
+      font-size: 13px;
+      margin-bottom: 9px;
+    }
+
+    .answer-text {
+      font-size: 20px;
+      line-height: 1.55;
+      color: #202124;
+      max-width: 720px;
+    }
+
+    .sources-title {
+      color: #5f6368;
+      font-size: 14px;
+      font-weight: 500;
+      margin: 0 0 22px;
+    }
+
+    /* =========================
+       LOADING
+       ========================= */
+
+    .loading {
+      color: #70757a;
+      font-size: 14px;
+      padding: 20px 0;
+    }
+
+    .dots::after {
+      content: "...";
+      display: inline-block;
+      width: 18px;
+      overflow: hidden;
+      vertical-align: bottom;
+      animation: dots 1.2s steps(4, end) infinite;
+    }
+
+    @keyframes dots {
+      0% {
+        width: 0;
       }
 
-      if (note) {
-        note.textContent =
-          "TROOLLgel found something that looks like an answer. It may still be wrong.";
+      50% {
+        width: 18px;
       }
 
-      const sources = Array.isArray(data.results)
-        ? data.results.slice(0, 4)
-        : [];
+      100% {
+        width: 0;
+      }
+    }
 
-      list.innerHTML = `
-        <article class="answer-box">
+    .error {
+      color: #5f6368;
+      font-size: 14px;
+      padding: 20px 0;
+    }
 
-          <div class="answer-label">
-            TROOLLgel answer
-          </div>
+    /* =========================
+       MOBILE
+       ========================= */
 
-          <div class="answer-text">
-            ${esc(data.answer)}
-          </div>
+    @media (max-width: 800px) {
 
-        </article>
+      .home-main {
+        margin-top: 130px;
+        padding: 0 18px;
+      }
 
-        ${
-          sources.length
-            ? `
-              <div class="sources-title">
-                Sources
+      .logo {
+        font-size: 48px;
+      }
+
+      .topbar {
+        height: auto;
+        min-height: 74px;
+        padding: 12px 16px;
+        gap: 15px;
+        flex-wrap: wrap;
+      }
+
+      .top-logo {
+        font-size: 25px;
+      }
+
+      .top-search-form {
+        order: 3;
+        width: 100%;
+        padding-bottom: 4px;
+      }
+
+      .results-layout {
+        margin-left: 0;
+        width: 100%;
+        padding: 24px 18px 60px;
+      }
+
+      .answer-text {
+        font-size: 18px;
+      }
+
+      .title {
+        font-size: 18px;
+      }
+    }
+
+    @media (max-width: 480px) {
+
+      .home-main {
+        margin-top: 105px;
+      }
+
+      .logo {
+        font-size: 42px;
+        letter-spacing: -3px;
+      }
+
+      .search-box {
+        height: 52px;
+      }
+
+      .home-buttons {
+        margin-top: 20px;
+      }
+
+      .home-note {
+        line-height: 1.5;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- =========================
+       HOME PAGE
+       ========================= -->
+
+  <main id="home">
+
+    <div class="home-main">
+
+      <div class="logo" aria-label="TROOLLgel">
+        <span class="t">T</span><span class="r">R</span><span class="o1">O</span><span class="o2">O</span><span class="l">L</span><span class="g">g</span><span class="e">e</span><span class="small">l</span>
+      </div>
+
+      <form id="homeForm" class="search-form">
+
+        <div class="search-box">
+
+          <div class="search-icon"></div>
+
+          <input
+            id="homeQuery"
+            class="search-input"
+            type="text"
+            autocomplete="off"
+            placeholder=""
+            aria-label="Search"
+          >
+
+          <button
+            class="search-submit"
+            type="submit"
+            aria-label="Search"
+          >
+            Search
+          </button>
+
+        </div>
+
+      </form>
+
+      <div class="home-buttons">
+
+        <button
+          class="google-button"
+          type="button"
+          onclick="document.getElementById('homeQuery').focus()"
+        >
+          Google Search
+        </button>
+
+      </div>
+
+      <div class="home-note">
+        Results may contain information that is slightly less reliable than usual.
+      </div>
+
+    </div>
+
+  </main>
+
+
+  <!-- =========================
+       RESULTS PAGE
+       ========================= -->
+
+  <main id="results">
+
+    <header class="topbar">
+
+      <div
+        id="logoBack"
+        class="top-logo"
+        title="Back to TROOLLgel"
+      >
+        <span class="t">T</span><span class="r">R</span><span class="o1">O</span><span class="o2">O</span><span class="l">L</span><span class="g">g</span><span class="e">e</span><span class="small">l</span>
+      </div>
+
+      <form id="resultForm" class="top-search-form">
+
+        <div class="top-search-box">
+
+          <input
+            id="resultQuery"
+            class="top-search-input"
+            type="text"
+            autocomplete="off"
+            aria-label="Search"
+          >
+
+          <button
+            class="top-search-button"
+            type="submit"
+            aria-label="Search"
+          >
+            🔍
+          </button>
+
+        </div>
+
+      </form>
+
+    </header>
+
+
+    <section class="results-layout">
+
+      <div class="results-meta">
+
+        <div id="count"></div>
+
+        <div id="search-note">
+          Results are generated by TROOLLgel and may be slightly less reliable than usual.
+        </div>
+
+      </div>
+
+      <div id="list"></div>
+
+    </section>
+
+  </main>
+
+
+  <!-- =========================
+       TROOLLgel SEARCH ENGINE
+       ========================= -->
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+
+      const home = document.getElementById("home");
+      const results = document.getElementById("results");
+      const list = document.getElementById("list");
+
+      const homeQuery = document.getElementById("homeQuery");
+      const resultQuery = document.getElementById("resultQuery");
+      const count = document.getElementById("count");
+      const note = document.getElementById("search-note");
+
+      const homeForm = document.getElementById("homeForm");
+      const resultForm = document.getElementById("resultForm");
+      const logoBack = document.getElementById("logoBack");
+
+      function esc(value) {
+        return String(value ?? "").replace(/[&<>"']/g, char => ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;"
+        }[char]));
+      }
+
+      function showHome() {
+
+        if (results) {
+          results.style.display = "none";
+        }
+
+        if (home) {
+          home.style.display = "flex";
+        }
+
+        window.scrollTo(0, 0);
+
+        if (homeQuery) {
+          setTimeout(() => homeQuery.focus(), 50);
+        }
+      }
+
+      function showResults() {
+
+        if (home) {
+          home.style.display = "none";
+        }
+
+        if (results) {
+          results.style.display = "block";
+        }
+
+        window.scrollTo(0, 0);
+      }
+
+      function renderResults(data) {
+
+        if (!data || typeof data !== "object") {
+          throw new Error("Invalid response from server.");
+        }
+
+        if (!list) {
+          throw new Error("Results container not found.");
+        }
+
+        /*
+         * AI ANSWER MODE
+         */
+
+        if (data.mode === "answer" && data.answer) {
+
+          if (count) {
+            count.textContent =
+              "About " +
+              (data.count || "a suspicious number") +
+              " results";
+          }
+
+          if (note) {
+            note.textContent =
+              "TROOLLgel found something that looks like an answer. It may still be wrong.";
+          }
+
+          const sources = Array.isArray(data.results)
+            ? data.results.slice(0, 4)
+            : [];
+
+          list.innerHTML = `
+            <article class="answer-box">
+
+              <div class="answer-label">
+                TROOLLgel answer
               </div>
 
-              ${sources.map(x => `
-                <article class="result">
+              <div class="answer-text">
+                ${esc(data.answer)}
+              </div>
 
-                  <div class="url">
-                    ${esc(x.url)}
+            </article>
+
+            ${
+              sources.length
+                ? `
+                  <div class="sources-title">
+                    Sources
                   </div>
 
-                  <div class="title">
-                    <a
-                      href="${esc(x.url)}"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      ${esc(x.title)}
-                    </a>
-                  </div>
+                  ${sources.map(source => `
+                    <article class="result">
 
-                  <div class="snippet">
-                    ${esc(x.snippet)}
-                  </div>
+                      <div class="url">
+                        ${esc(source.url)}
+                      </div>
 
-                </article>
-              `).join("")}
-            `
-            : ""
+                      <div class="title">
+                        <a
+                          href="${esc(source.url)}"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          ${esc(source.title)}
+                        </a>
+                      </div>
+
+                      <div class="snippet">
+                        ${esc(source.snippet)}
+                      </div>
+
+                    </article>
+                  `).join("")}
+                `
+                : ""
+            }
+          `;
+
+          return;
         }
-      `;
 
-      return;
-    }
 
-    if (count) {
-      count.textContent =
-        "About " + (data.count || "a suspicious number") + " results";
-    }
+        /*
+         * NORMAL SEARCH RESULTS
+         */
 
-    if (note) {
-      note.textContent =
-        "Results are generated by TROOLLgel and may be slightly less reliable than usual.";
-    }
+        const items = Array.isArray(data.results)
+          ? data.results
+          : [];
 
-    const items = Array.isArray(data.results)
-      ? data.results
-      : [];
+        if (count) {
+          count.textContent =
+            "About " +
+            (data.count || items.length || "a suspicious number") +
+            " results";
+        }
 
-    if (!items.length) {
-      list.innerHTML = `
-        <div class="error">
-          TROOLLgel found absolutely nothing. Suspicious.
-        </div>
-      `;
+        if (note) {
+          note.textContent =
+            "Results are generated by TROOLLgel and may be slightly less reliable than usual.";
+        }
 
-      return;
-    }
+        if (!items.length) {
 
-    list.innerHTML = items.map(x => `
-      <article class="result ${x.troll ? "troll" : ""}">
+          list.innerHTML = `
+            <div class="error">
+              TROOLLgel found absolutely nothing. Suspicious.
+            </div>
+          `;
 
-        <div class="url">
-          ${esc(x.url)}
-        </div>
+          return;
+        }
 
-        <div class="title">
-          <a
-            href="${esc(x.url)}"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            ${esc(x.title)}
-          </a>
-        </div>
+        list.innerHTML = items.map(item => `
 
-        <div class="snippet">
-          ${esc(x.snippet)}
-        </div>
+          <article class="result">
 
-      </article>
-    `).join("");
-  }
+            <div class="url">
+              ${esc(item.url)}
+            </div>
 
-  async function search(query) {
+            <div class="title">
 
-    const q = String(query || "").trim();
+              <a
+                href="${esc(item.url)}"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                ${esc(item.title)}
+              </a>
 
-    if (!q) {
-      return;
-    }
+            </div>
 
-    showResults();
+            <div class="snippet">
+              ${esc(item.snippet)}
+            </div>
 
-    if (resultQuery) {
-      resultQuery.value = q;
-    }
+          </article>
 
-    if (list) {
-      list.innerHTML = `
-        <div class="loading">
-          Searching the internet
-          <span class="dots"></span>
-        </div>
-      `;
-    }
+        `).join("");
+      }
 
-    try {
 
-      const response = await fetch("/api/search", {
-        method: "POST",
+      /*
+       * SEARCH
+       */
 
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json"
-        },
+      async function search(query) {
 
-        body: JSON.stringify({
-          query: q
-        })
-      });
+        const q = String(query || "").trim();
 
-      const raw = await response.text();
+        if (!q) {
+          return;
+        }
 
-      let data;
+        showResults();
 
-      try {
-        data = JSON.parse(raw);
-      } catch (error) {
+        if (resultQuery) {
+          resultQuery.value = q;
+        }
 
-        console.error("Invalid JSON from server:", raw);
+        if (list) {
 
-        throw new Error(
-          "The server returned an invalid response."
+          list.innerHTML = `
+            <div class="loading">
+              Searching the internet<span class="dots"></span>
+            </div>
+          `;
+
+        }
+
+        if (count) {
+          count.textContent = "";
+        }
+
+        if (note) {
+          note.textContent =
+            "TROOLLgel is looking around. Results may be slightly less reliable than usual.";
+        }
+
+        try {
+
+          const response = await fetch("/api/search", {
+
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json",
+              "Accept": "application/json"
+            },
+
+            body: JSON.stringify({
+              query: q
+            })
+
+          });
+
+
+          /*
+           * Read as text first so a server-side error
+           * does not crash JSON parsing.
+           */
+
+          const raw = await response.text();
+
+          let data;
+
+          try {
+
+            data = JSON.parse(raw);
+
+          } catch (error) {
+
+            console.error(
+              "Server returned invalid JSON:",
+              raw
+            );
+
+            throw new Error(
+              "The search server returned an unexpected response."
+            );
+
+          }
+
+
+          if (!response.ok) {
+
+            throw new Error(
+              data.error ||
+              data.message ||
+              "Search failed."
+            );
+
+          }
+
+
+          renderResults(data);
+
+        } catch (error) {
+
+          console.error(
+            "TROOLLgel search error:",
+            error
+          );
+
+          if (list) {
+
+            list.innerHTML = `
+              <div class="error">
+                ${esc(
+                  error.message ||
+                  "TROOLLgel tripped over its own wires."
+                )}
+              </div>
+            `;
+
+          }
+
+        }
+
+      }
+
+
+      /*
+       * HOME FORM
+       */
+
+      if (homeForm) {
+
+        homeForm.addEventListener(
+          "submit",
+          event => {
+
+            event.preventDefault();
+
+            search(
+              homeQuery
+                ? homeQuery.value
+                : ""
+            );
+
+          }
         );
+
       }
 
-      if (!response.ok) {
-        throw new Error(
-          data.error ||
-          data.message ||
-          "Search failed."
+
+      /*
+       * RESULTS FORM
+       */
+
+      if (resultForm) {
+
+        resultForm.addEventListener(
+          "submit",
+          event => {
+
+            event.preventDefault();
+
+            search(
+              resultQuery
+                ? resultQuery.value
+                : ""
+            );
+
+          }
         );
+
       }
 
-      renderResults(data);
 
-    } catch (error) {
+      /*
+       * LOGO → HOME
+       */
 
-      console.error("TROOLLgel search error:", error);
+      if (logoBack) {
 
-      if (list) {
-        list.innerHTML = `
-          <div class="error">
-            ${esc(error.message || "Something went wrong.")}
-          </div>
-        `;
+        logoBack.addEventListener(
+          "click",
+          event => {
+
+            event.preventDefault();
+
+            showHome();
+
+          }
+        );
+
       }
-    }
-  }
-
-  /*
-   * HOME SEARCH
-   */
-
-  if (homeForm) {
-
-    homeForm.addEventListener("submit", event => {
-
-      event.preventDefault();
-
-      search(homeQuery ? homeQuery.value : "");
-
-    });
-
-  }
 
 
-  /*
-   * RESULTS SEARCH
-   */
-
-  if (resultForm) {
-
-    resultForm.addEventListener("submit", event => {
-
-      event.preventDefault();
-
-      search(resultQuery ? resultQuery.value : "");
-
-    });
-
-  }
-
-
-  /*
-   * SUGGESTION CHIPS
-   */
-
-  document.querySelectorAll(".chip").forEach(chip => {
-
-    chip.addEventListener("click", () => {
-
-      search(chip.textContent);
-
-    });
-
-  });
-
-
-  /*
-   * LOGO → HOME
-   */
-
-  if (logoBack) {
-
-    logoBack.addEventListener("click", event => {
-
-      event.preventDefault();
+      /*
+       * START ON HOME
+       */
 
       showHome();
 
     });
+  </script>
 
-  }
-
-
-  /*
-   * NEW SEARCH
-   */
-
-  if (again) {
-
-    again.addEventListener("click", event => {
-
-      event.preventDefault();
-
-      if (homeQuery) {
-        homeQuery.value = "";
-      }
-
-      showHome();
-
-    });
-
-  }
-
-
-  /*
-   * INITIAL STATE
-   */
-
-  showHome();
-
-});
-</script>
+</body>
+</html>
