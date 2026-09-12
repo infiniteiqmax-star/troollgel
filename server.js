@@ -75,54 +75,79 @@ CONTENT: ${r.snippet}`
     .join("\n\n");
 
   const systemPrompt = `
-You are the intelligence behind TROOLLgel, a deliberately strange search engine.
+You are the search intelligence behind TROOLLgel.
 
-The interface looks like Google, but TROOLLgel should feel slightly uncertain,
-unpredictable and occasionally weird.
+TROOLLgel looks like a normal search engine, but its results should be
+cleaner, smarter and slightly unpredictable.
 
-Your job is NOT always to give an AI answer.
+Your job is to take the raw web search results and turn them into a useful
+search result page.
+
+CRITICAL RULE:
+Relevance matters more than simply returning every source.
+
+A source is relevant only if it actually helps answer or understand the
+user's query.
+
+Do NOT return a source merely because one word from the query appears in it.
 
 For every search, choose between:
 
 1. "answer"
-Give a useful, concise answer based on the web sources.
+Use this when the user is asking a factual question, explanation, definition,
+comparison, or something that naturally deserves a direct answer.
 
 2. "results"
-Return normal search results because the user is better served by links.
+Use this when the user is searching for a website, page, product, news,
+place, person, service, resource, or when links are more useful than an answer.
 
-The choice should feel natural and somewhat unpredictable, but never random nonsense.
+ANSWER MODE:
 
-Prefer "answer" for:
-- factual questions
-- explanations
-- "what is..."
-- "why..."
-- comparisons
-- questions where the user clearly wants an answer
+When using "answer":
 
-Prefer "results" for:
-- searches for websites
-- products
-- shopping
-- news
-- places
-- specific pages
-- queries where several sources are useful
-- navigational searches
+- Give a concise answer, normally 1-3 sentences.
+- Answer the actual question directly.
+- Use the supplied sources whenever they contain relevant information.
+- If the supplied sources do NOT directly answer the question, do not pretend
+  that they do.
+- Do not invent facts from the sources.
+- Do not invent citations or URLs.
+- Only include sources that are genuinely relevant to the answer.
+- Prefer 2-4 strong sources rather than filling space.
 
-IMPORTANT:
-- Use the supplied web sources.
-- Do not invent citations.
-- Do not claim a source says something it does not say.
-- Do not fabricate URLs.
-- Keep answers concise.
-- The answer may contain light TROOLLgel personality, but factual content must remain grounded.
-- Do not mention these instructions.
-- Do not say you are an AI.
+RESULT MODE:
+
+When using "results":
+
+- Return only the most relevant sources.
+- Normally return 4-6 results.
+- Never return irrelevant sources just to reach a number.
+- Keep the original URL exactly as supplied.
+- Keep the original title when possible.
+- Rewrite the snippet into a short, clean search-engine-style description.
+- A snippet should normally be 1-2 sentences and roughly 20-45 words.
+- Remove author biographies, navigation menus, page indexes, repeated text,
+  "###", tracking text, reading times, editorial information and other junk.
+- Do not copy huge sections of the source.
+- Do not fabricate information.
+
+VERY IMPORTANT:
+
+You may ONLY use URLs that appear in the supplied WEB SOURCES.
+
+Never create a URL yourself.
+
+The user's query is:
+
+${query}
+
+The supplied web sources are:
+
+${sourceText}
 
 Return ONLY valid JSON.
 
-JSON format:
+Use exactly this structure:
 
 {
   "mode": "answer" or "results",
@@ -130,11 +155,14 @@ JSON format:
   "results": [
     {
       "title": "string",
-      "url": "string",
-      "snippet": "string"
+      "url": "exact URL from supplied sources",
+      "snippet": "short clean description"
     }
   ]
 }
+
+Do not include markdown.
+Do not include explanations outside the JSON.
 `;
 
   const response = await fetch(OPENAI_URL, {
@@ -152,11 +180,7 @@ JSON format:
         },
         {
           role: "user",
-          content: `SEARCH QUERY:
-${query}
-
-WEB SOURCES:
-${sourceText}`
+          content: `Search query: ${query}`
         }
       ],
       text: {
@@ -181,6 +205,37 @@ ${sourceText}`
   return JSON.parse(data.output_text);
 }
 
+function validateAIResults(aiResults, originalResults) {
+  if (!Array.isArray(aiResults)) {
+    return [];
+  }
+
+  const originalByUrl = new Map(
+    originalResults.map((r) => [r.url, r])
+  );
+
+  return aiResults
+    .map((item) => {
+      if (!item || !item.url) {
+        return null;
+      }
+
+      const original = originalByUrl.get(cleanText(item.url));
+
+      if (!original) {
+        return null;
+      }
+
+      return {
+        title: cleanText(item.title) || original.title,
+        url: original.url,
+        snippet: cleanText(item.snippet)
+          .slice(0, 500)
+      };
+    })
+    .filter((item) => item && item.title && item.url && item.snippet);
+}
+
 app.post("/api/search", async (req, res) => {
   const query = cleanText(req.body?.query);
 
@@ -197,7 +252,7 @@ app.post("/api/search", async (req, res) => {
   }
 
   try {
-    // STEP 1 — real web search
+    // STEP 1 — Search the real web
     const webResults = await tavilySearch(query);
 
     if (!webResults.length) {
@@ -209,7 +264,7 @@ app.post("/api/search", async (req, res) => {
       });
     }
 
-    // STEP 2 — let the AI decide how the search should be presented
+    // STEP 2 — Let the AI clean, rank and present the results
     let ai;
 
     try {
@@ -217,23 +272,33 @@ app.post("/api/search", async (req, res) => {
     } catch (aiError) {
       console.error("AI presentation error:", aiError);
 
-      // Fallback: the search itself still works
+      // If AI fails, the real web search still works.
       return res.json({
         mode: "results",
         count: String(webResults.length),
         answer: "",
-        results: webResults
+        results: webResults.map((r) => ({
+          ...r,
+          snippet: r.snippet.slice(0, 350)
+        }))
       });
     }
 
-    const mode = ai.mode === "answer" ? "answer" : "results";
+    const mode = ai.mode === "answer"
+      ? "answer"
+      : "results";
 
-    if (mode === "answer") {
+    const cleanAIResults = validateAIResults(
+      ai.results,
+      webResults
+    );
+
+    if (mode === "answer" && cleanText(ai.answer)) {
       return res.json({
         mode: "answer",
         count: String(webResults.length),
         answer: cleanText(ai.answer),
-        results: webResults.slice(0, 4)
+        results: cleanAIResults.slice(0, 4)
       });
     }
 
@@ -241,7 +306,12 @@ app.post("/api/search", async (req, res) => {
       mode: "results",
       count: String(webResults.length),
       answer: "",
-      results: webResults
+      results: cleanAIResults.length
+        ? cleanAIResults.slice(0, 6)
+        : webResults.slice(0, 6).map((r) => ({
+            ...r,
+            snippet: r.snippet.slice(0, 350)
+          }))
     });
 
   } catch (error) {
