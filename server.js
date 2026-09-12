@@ -21,7 +21,6 @@ function cleanText(value) {
 
 
 function safeResults(results) {
-
   return (Array.isArray(results) ? results : [])
     .slice(0, 8)
     .map(item => ({
@@ -30,14 +29,12 @@ function safeResults(results) {
       snippet: cleanText(item?.content || item?.snippet)
     }))
     .filter(item => item.title && item.url);
-
 }
 
 
 /*
  * REAL WEB SEARCH
  */
-
 async function tavilySearch(query) {
 
   if (!process.env.TAVILY_API_KEY) {
@@ -84,362 +81,316 @@ async function tavilySearch(query) {
     throw new Error(
       "Web search is currently unavailable."
     );
-
   }
 
   return safeResults(data.results);
-
 }
 
 
 /*
- * Detect queries where the user actually wants
- * real current/navigation/search information.
+ * DETERMINE WHETHER THIS IS THE KIND OF QUERY
+ * WHERE REAL "THINGS YOU PROBABLY WANTED INSTEAD"
+ * RESULTS ARE USEFUL.
  *
- * These are NOT trolled.
+ * Simple factual questions such as:
+ *
+ *   what is gravity?
+ *   why is the sky blue?
+ *   what is bitcoin?
+ *
+ * DO NOT get links.
+ *
+ * Practical/recommendation queries DO.
  */
+function shouldShowCounterLinks(query) {
 
-function isRealSearch(query) {
+  const q = cleanText(query).toLowerCase();
 
-  const q =
-    cleanText(query).toLowerCase();
+  const practicalPatterns = [
 
-
-  const patterns = [
-
-    /*
-     * Direct websites
-     */
-
-    /^google$/,
-    /^youtube$/,
-    /^facebook$/,
-    /^instagram$/,
-    /^reddit$/,
-    /^wikipedia$/,
-
-    /*
-     * URLs
-     */
-
-    /^https?:\/\//,
-    /\.com$/,
-    /\.net$/,
-    /\.org$/,
-
-    /*
-     * Current information
-     */
-
-    /\b(latest|today|current|now|live|breaking|news)\b/,
-
-    /*
-     * Prices / markets
-     */
-
-    /\b(stock price|share price|btc price|bitcoin price|crypto price)\b/,
-    /\b(exchange rate|currency rate)\b/,
-
-    /*
-     * Sports
-     */
-
-    /\b(score|scores|standings|schedule|fixtures|results)\b/,
-
-    /*
-     * Navigation / nearby places
-     */
-
-    /\bnear me\b/,
-    /\bopen now\b/,
-    /\bopening hours\b/,
-    /\bdirections\b/,
-
-    /*
-     * Website navigation
-     */
-
-    /\bwebsite\b/,
-    /\blogin\b/,
-    /\bhomepage\b/,
-    /\bofficial site\b/,
-
-    /*
-     * Tracking
-     */
-
-    /\btracking number\b/,
-    /\border status\b/
+    "best ",
+    "top ",
+    "recommend",
+    "recommendation",
+    "where can i",
+    "where should i",
+    "where to",
+    "near me",
+    "in ljubljana",
+    "in slovenia",
+    "restaurants",
+    "restaurant",
+    "burger",
+    "burgers",
+    "food",
+    "fast food",
+    "hotel",
+    "hotels",
+    "flight",
+    "flights",
+    "trip",
+    "travel",
+    "vacation",
+    "recipe",
+    "recipes",
+    "buy ",
+    "buying ",
+    "shop ",
+    "shopping",
+    "lose weight",
+    "weight loss",
+    "how can i",
+    "how do i",
+    "how to ",
+    "guide",
+    "tips",
+    "things to do",
+    "places to visit",
+    "things to see",
+    "what should i eat",
+    "what should i buy"
 
   ];
 
-
-  return patterns.some(
-    pattern => pattern.test(q)
+  return practicalPatterns.some(
+    pattern => q.includes(pattern)
   );
-
 }
 
 
 /*
- * Find a suitable CONTRA category.
+ * ASK OPENAI FOR THE REAL SEARCH QUERY THAT SHOULD
+ * APPEAR UNDER THE TROLL ANSWER.
  *
- * If the request has a natural opposite,
- * we search for that opposite and show real links.
+ * IMPORTANT:
  *
- * If there isn't a good opposite,
- * return null and show only the troll answer.
+ * The user does NOT necessarily want the literal
+ * search repeated.
+ *
+ * Example:
+ *
+ * "10 best burgers in Ljubljana"
+ *
+ * becomes something like:
+ *
+ * "vegan restaurants in Ljubljana"
+ *
+ * while:
+ *
+ * "how can I lose weight"
+ *
+ * becomes:
+ *
+ * "healthy ways to lose weight"
+ *
+ * For useless factual questions it returns NONE.
  */
+async function counterSearchQuery(query) {
 
-function getContraQuery(query) {
-
-  const q =
-    cleanText(query).toLowerCase();
-
-
-  /*
-   * BURGERS <-> VEGAN
-   */
-
-  if (
-    /\b(burger|burgers)\b/.test(q)
-  ) {
-
-    return "best vegan restaurants " +
-      extractLocation(q);
-
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is not configured.");
   }
 
+  const instructions = `
 
-  if (
-    /\b(vegan|vegan restaurants)\b/.test(q)
-  ) {
+You are helping TROOLLgel, a parody search engine.
 
-    return "best burger restaurants " +
-      extractLocation(q);
+The user asked a question or search query.
 
-  }
+We need to decide what REAL WEB RESULTS should appear
+under the joke answer.
 
+The results should be something the user could genuinely
+find useful, but they can deliberately be CONTRARY,
+SIDEWAYS, or ABSURDLY MISUNDERSTOOD.
 
-  /*
-   * PIZZA <-> SUSHI
-   */
+Examples:
 
-  if (
-    /\bpizza\b/.test(q)
-  ) {
+USER:
+10 best burgers in Ljubljana
 
-    return "best sushi restaurants " +
-      extractLocation(q);
+GOOD SEARCH QUERY:
+vegan restaurants in Ljubljana
 
-  }
+USER:
+10 best burgers in town
 
+GOOD SEARCH QUERY:
+best vegan restaurants in town
 
-  if (
-    /\bsushi\b/.test(q)
-  ) {
+USER:
+how can I lose weight
 
-    return "best pizza restaurants " +
-      extractLocation(q);
+GOOD SEARCH QUERY:
+healthy ways to lose weight
 
-  }
+USER:
+best fast food in Ljubljana
 
+GOOD SEARCH QUERY:
+vegetarian restaurants in Ljubljana
 
-  /*
-   * HEALTHY <-> JUNK FOOD
-   */
+USER:
+best hotels in Paris
 
-  if (
-    /\b(healthy|healthy food|healthy restaurants)\b/.test(q)
-  ) {
+GOOD SEARCH QUERY:
+cheap hostels in Paris
 
-    return "best burger restaurants " +
-      extractLocation(q);
+The important thing is that the result should still be
+a REAL, useful web search.
 
-  }
+For ordinary factual questions where no alternative
+search is useful, return:
 
+NONE
 
-  /*
-   * WEIGHT LOSS <-> BURGERS / DESSERT
-   */
+Examples:
 
-  if (
-    /\b(lose weight|weight loss|losing weight|diet)\b/.test(q)
-  ) {
+what is gravity?
+NONE
 
-    return "best burger restaurants";
+why is the sky blue?
+NONE
 
-  }
+what is bitcoin?
+NONE
 
+Do not answer the user's question.
 
-  /*
-   * FITNESS <-> LAZY / FOOD
-   */
+Do not explain anything.
 
-  if (
-    /\b(workout|workouts|exercise|gym|fitness)\b/.test(q)
-  ) {
+Return ONLY one search query, or exactly:
 
-    return "best burger restaurants";
+NONE
 
-  }
+No quotation marks.
+No punctuation at the end.
+No explanation.
+`;
 
 
-  /*
-   * MOVIES <-> TV
-   */
+  const response = await fetch(OPENAI_URL, {
 
-  if (
-    /\b(movie|movies|film|films)\b/.test(q)
-  ) {
+    method: "POST",
 
-    return "best TV shows";
+    headers: {
 
-  }
+      "Content-Type": "application/json",
 
+      "Authorization":
+        `Bearer ${process.env.OPENAI_API_KEY}`
 
-  if (
-    /\b(tv shows?|series)\b/.test(q)
-  ) {
+    },
 
-    return "best movies";
+    body: JSON.stringify({
 
-  }
+      model: OPENAI_MODEL,
 
+      instructions,
 
-  /*
-   * DOGS <-> CATS
-   */
+      input:
+        `USER QUERY:\n${query}`,
 
-  if (
-    /\bdogs?\b/.test(q)
-  ) {
+      max_output_tokens: 100
 
-    return "funny cats";
+    })
 
-  }
+  });
 
 
-  if (
-    /\bcats?\b/.test(q)
-  ) {
+  const data = await response.json();
 
-    return "funny dogs";
 
-  }
+  if (!response.ok) {
 
-
-  /*
-   * COFFEE <-> TEA
-   */
-
-  if (
-    /\bcoffee\b/.test(q)
-  ) {
-
-    return "best tea cafes";
-
-  }
-
-
-  if (
-    /\btea\b/.test(q)
-  ) {
-
-    return "best coffee cafes";
-
-  }
-
-
-  /*
-   * ANDROID <-> IPHONE
-   */
-
-  if (
-    /\bandroid\b/.test(q)
-  ) {
-
-    return "best iPhone";
-
-  }
-
-
-  if (
-    /\biphone\b/.test(q)
-  ) {
-
-    return "best Android phones";
-
-  }
-
-
-  /*
-   * PC <-> CONSOLE
-   */
-
-  if (
-    /\b(pc gaming|gaming pc|gaming computer)\b/.test(q)
-  ) {
-
-    return "best gaming consoles";
-
-  }
-
-
-  if (
-    /\b(playstation|xbox|gaming console|gaming consoles)\b/.test(q)
-  ) {
-
-    return "best gaming PCs";
-
-  }
-
-
-  /*
-   * Otherwise no contra search.
-   */
-
-  return null;
-
-}
-
-
-/*
- * Try to preserve a location such as:
- *
- * "in Ljubljana"
- * "near Ljubljana"
- * "in New York"
- *
- * We don't need perfect NLP here.
- */
-
-function extractLocation(query) {
-
-  const match =
-    query.match(
-      /\b(?:in|near)\s+(.+)$/i
+    console.error(
+      "OPENAI COUNTER QUERY ERROR:",
+      JSON.stringify(data?.error, null, 2)
     );
 
-  if (!match) {
+    throw new Error(
+      data?.error?.message ||
+      "Counter search query failed."
+    );
+  }
+
+
+  let text = "";
+
+
+  if (typeof data?.output_text === "string") {
+    text = data.output_text.trim();
+  }
+
+
+  if (
+    !text &&
+    Array.isArray(data?.output)
+  ) {
+
+    for (const item of data.output) {
+
+      if (!Array.isArray(item?.content)) {
+        continue;
+      }
+
+      for (const content of item.content) {
+
+        if (
+          content?.type === "output_text" &&
+          typeof content.text === "string"
+        ) {
+
+          text += content.text;
+        }
+      }
+    }
+  }
+
+
+  text = cleanText(text);
+
+
+  if (!text || text.toUpperCase() === "NONE") {
     return "";
   }
 
-  return cleanText(match[1]);
 
+  /*
+   * Remove accidental quotation marks.
+   */
+  text = text
+    .replace(/^["']+/, "")
+    .replace(/["']+$/, "")
+    .trim();
+
+
+  /*
+   * Safety limit.
+   */
+  if (text.length > 250) {
+    return "";
+  }
+
+
+  return text;
 }
 
 
 /*
- * Generate the short troll answer.
+ * TROOLLgel ANSWER
+ *
+ * VERY IMPORTANT:
+ *
+ * The model is explicitly forbidden from giving the
+ * normal/factual answer.
+ *
+ * It must produce the joke.
  */
-
 async function trollAnswer(query) {
 
   if (!process.env.OPENAI_API_KEY) {
-    throw new Error(
-      "OPENAI_API_KEY is not configured."
-    );
+    throw new Error("OPENAI_API_KEY is not configured.");
   }
 
 
@@ -449,133 +400,171 @@ You are TROOLLgel.
 
 TROOLLgel is a parody search engine.
 
-Your job is to give the user a SHORT,
-confident, funny and absurd answer.
+Your ONLY job is to give a short, confident,
+unexpected, absurd or cleverly wrong answer.
 
-You are deliberately NOT a normal search engine.
+NEVER give the normal factual answer to the user's question.
 
-The user may ask:
+This is extremely important.
 
-- a factual question
-- a how-to question
-- a recommendation
-- a ranking
-- a list
-- a request for restaurants
-- a request for burgers
-- a request for products
-- a request for movies
-- a request for anything else
+If the user asks:
 
-You MUST troll the request.
+"What is gravity?"
 
-Do NOT give the real answer.
+DO NOT explain gravity.
 
-Do NOT provide a real list.
+Instead say something absurd like:
 
-Do NOT provide actual recommendations.
+"Gravity is the universe's clingy roommate, constantly pulling everything toward it and refusing to give personal space."
 
-Do NOT provide actual restaurants.
+If the user asks:
 
-Do NOT provide actual burgers.
+"Why is the sky blue?"
 
-Do NOT provide actual products.
+DO NOT explain light scattering.
 
-Do NOT provide links.
+Instead give a ridiculous explanation.
 
-Do NOT mention sources.
+If the user asks:
 
-Do NOT explain the joke.
+"How can I lose weight?"
 
-Do NOT say that you are a parody.
+DO NOT give a normal diet or fitness plan.
 
-Do NOT mention AI.
+Instead give something like:
 
-Do NOT mention OpenAI.
+"Put your snacks on a high shelf and declare the staircase your personal fitness rival."
 
-Keep the answer extremely short.
+If the user asks:
 
-Normally ONE sentence.
+"10 best burgers in Ljubljana"
+
+DO NOT list burgers.
+
+Instead give a ridiculous answer such as:
+
+"The ten best Ljubljana burgers are currently hiding in a bun-based witness protection program."
+
+If the user asks:
+
+"Can dogs fly?"
+
+DO NOT give a normal aviation/pet answer.
+
+Give a ridiculous answer.
+
+STYLE:
+
+- Dry
+- Deadpan
+- Confident
+- Short
+- Unexpected
+- Clever
+- Absurd
+- Occasionally sarcastic
+
+The joke should sound like TROOLLgel genuinely believes
+what it is saying.
+
+DO NOT explain the joke.
+
+DO NOT explain your reasoning.
+
+DO NOT mention sources.
+
+DO NOT mention AI.
+
+DO NOT mention OpenAI.
+
+DO NOT mention prompts.
+
+DO NOT say "according to sources".
+
+DO NOT say "I can't answer that".
+
+DO NOT give a normal answer followed by a joke.
+
+DO NOT give a factual explanation with only a small joke added.
+
+THE ENTIRE ANSWER MUST BE THE JOKE.
+
+Normally use ONE sentence.
 
 Maximum TWO short sentences.
 
-The joke must directly relate to the user's request.
+Do not use markdown.
 
-Examples:
+Do not use bullet points.
 
-USER:
-what is gravity?
+Do not provide lists.
 
-ANSWER:
-Gravity is Earth's way of saying "stay down there" while pretending it has everything under control.
+Do not provide real recommendations.
 
-USER:
-can dogs fly?
+Do not provide real instructions.
 
-ANSWER:
-Only when launched by a very optimistic squirrel.
+The answer should feel like a completely ridiculous
+alternative reality.
 
-USER:
-why is the sky blue?
+IMPORTANT SAFETY:
 
-ANSWER:
-Because the atmosphere bought blue in bulk and has been trying to finish the order ever since.
+For medical, self-harm, dangerous, criminal, weapons,
+hate, personal-data, or other genuinely high-risk topics,
+do not provide dangerous instructions or encouragement.
 
-USER:
-how do I lose weight?
+You can still use harmless absurd humor,
+but safety comes first.
 
-ANSWER:
+Here are examples of the desired style:
+
+Question: can dogs fly?
+
+Answer:
+No. Dogs skipped the wing upgrade and got zoomies instead.
+
+Question: what is gravity?
+
+Answer:
+Gravity is the universe's clingy roommate, constantly pulling everything toward it and refusing to give personal space.
+
+Question: why is the sky blue?
+
+Answer:
+Because blue was available in bulk and the atmosphere has never been good at explaining its purchasing decisions.
+
+Question: how do planes fly?
+
+Answer:
+Mostly by moving forward fast enough to avoid having an uncomfortable meeting with gravity.
+
+Question: how can I lose weight?
+
+Answer:
 Put your snacks on a high shelf and declare the staircase your personal fitness rival.
 
-USER:
-10 best burgers
+Question: how do I become a millionaire?
 
-ANSWER:
-The top ten burgers have unionized and are currently negotiating better buns.
+Answer:
+Become a billionaire first, then lose half your money. It's the traditional route.
 
-USER:
-10 best vegan restaurants
+Question: 10 best burgers in Ljubljana?
 
-ANSWER:
-The top ten vegan restaurants are actually one very ambitious carrot operating ten different businesses.
+Answer:
+The ten best Ljubljana burgers are currently hiding in a bun-based witness protection program.
 
-USER:
-recommend a laptop
+Question: what is bitcoin?
 
-ANSWER:
-Buy the one that looks most expensive when you close the lid.
+Answer:
+Bitcoin is a spreadsheet that escaped the office and somehow convinced everyone it was a financial asset.
 
-IMPORTANT:
+DO NOT reuse these examples verbatim unless the user asks
+the exact same question.
 
-These are examples of STYLE ONLY.
+Vary the wording.
 
-Never copy them word-for-word.
+MOST IMPORTANT RULE:
 
-Invent a fresh joke specifically for the user's request.
-
-If the user asks for a list,
-DO NOT give the actual list.
-
-If the user asks for restaurants,
-DO NOT give actual restaurants.
-
-If the user asks for burgers,
-DO NOT give actual burgers.
-
-Instead make the REQUEST itself the subject of the joke.
-
-For dangerous or high-risk requests,
-remain safe and do not provide harmful instructions.
-
-No markdown.
-No bullet points.
-No sources.
-No URLs.
-No explanation.
-
-USER REQUEST:
-
-${query}
+NEVER ANSWER THE USER'S ACTUAL QUESTION NORMALLY.
 
 `;
 
@@ -599,9 +588,10 @@ ${query}
 
       instructions,
 
-      input: query,
+      input:
+        `USER QUESTION:\n${query}`,
 
-      max_output_tokens: 250
+      max_output_tokens: 200
 
     })
 
@@ -609,6 +599,17 @@ ${query}
 
 
   const data = await response.json();
+
+
+  console.log(
+    "OPENAI STATUS:",
+    data?.status
+  );
+
+  console.log(
+    "OPENAI MODEL:",
+    data?.model
+  );
 
 
   if (!response.ok) {
@@ -622,7 +623,6 @@ ${query}
       data?.error?.message ||
       "OpenAI request failed."
     );
-
   }
 
 
@@ -635,10 +635,12 @@ ${query}
 
     text =
       data.output_text.trim();
-
   }
 
 
+  /*
+   * Fallback extraction.
+   */
   if (
     !text &&
     Array.isArray(data?.output)
@@ -658,13 +660,9 @@ ${query}
         ) {
 
           text += content.text;
-
         }
-
       }
-
     }
-
   }
 
 
@@ -673,21 +671,128 @@ ${query}
 
   if (!text) {
 
+    console.error(
+      "OPENAI RETURNED NO TEXT:",
+      JSON.stringify(data, null, 2)
+    );
+
     throw new Error(
       "EMPTY_OPENAI_RESPONSE"
     );
-
   }
 
 
   return text;
-
 }
 
 
 /*
- * MAIN SEARCH ENDPOINT
+ * DETERMINE WHETHER THE QUERY SHOULD GET A TROOLLgel
+ * ANSWER.
+ *
+ * This intentionally recognizes natural questions,
+ * but also recommendation/list queries.
+ *
+ * Examples:
+ *
+ * "what is gravity?" -> troll
+ * "why is the sky blue?" -> troll
+ * "can dogs fly?" -> troll
+ * "10 best burgers in Ljubljana" -> troll
+ * "best fast food in Ljubljana" -> troll
+ *
+ * Normal keyword searches that are not questions can
+ * still behave like ordinary search.
  */
+function isQuestion(query) {
+
+  const q =
+    cleanText(query).toLowerCase();
+
+
+  if (!q) return false;
+
+
+  if (q.endsWith("?")) {
+    return true;
+  }
+
+
+  const starters = [
+
+    "what ",
+    "why ",
+    "how ",
+    "when ",
+    "where ",
+    "who ",
+    "which ",
+    "can ",
+    "could ",
+    "would ",
+    "should ",
+    "is ",
+    "are ",
+    "do ",
+    "does ",
+    "did ",
+    "will ",
+    "has ",
+    "have ",
+    "am ",
+    "was ",
+    "were ",
+    "tell me ",
+    "explain "
+
+  ];
+
+
+  if (
+    starters.some(
+      start => q.startsWith(start)
+    )
+  ) {
+
+    return true;
+  }
+
+
+  /*
+   * Recommendation / ranking searches should also
+   * receive a TROOLLgel joke.
+   */
+  const recommendationPatterns = [
+
+    "best ",
+    "top ",
+    "10 best",
+    "top 10",
+    "recommendations",
+    "recommend",
+    "near me",
+    "things to do",
+    "places to visit",
+    "restaurants in",
+    "restaurant in",
+    "burgers in",
+    "burger in",
+    "fast food in",
+    "hotels in",
+    "hotel in",
+    "best restaurants",
+    "best burgers",
+    "best hotels",
+    "best food"
+
+  ];
+
+
+  return recommendationPatterns.some(
+    pattern => q.includes(pattern)
+  );
+}
+
 
 app.post("/api/search", async (req, res) => {
 
@@ -700,7 +805,6 @@ app.post("/api/search", async (req, res) => {
     return res.status(400).json({
       error: "Missing query"
     });
-
   }
 
 
@@ -709,175 +813,154 @@ app.post("/api/search", async (req, res) => {
     return res.status(400).json({
       error: "Query too long"
     });
-
   }
 
 
   try {
 
     /*
-     * First search the user's actual query.
-     */
-
-    const webResults =
-      await tavilySearch(query);
-
-
-    /*
-     * TRUE NAVIGATION / CURRENT SEARCH
+     * STEP 1
      *
-     * Show real results.
+     * Always perform a real search so that
+     * useful alternative links can be found.
      */
-
-    if (isRealSearch(query)) {
-
-      return res.json({
-
-        mode: "results",
-
-        count:
-          String(webResults.length),
-
-        answer: "",
-
-        results:
-          webResults
-
-      });
-
-    }
-
-
-    /*
-     * EVERYTHING ELSE IS TROLLED.
-     */
-
-    let answer;
+    let originalResults = [];
 
     try {
 
-      answer =
-        await trollAnswer(query);
+      originalResults =
+        await tavilySearch(query);
 
     } catch (error) {
 
       console.error(
-        "TROLL ANSWER ERROR:",
+        "ORIGINAL SEARCH FAILED:",
         error.message
       );
 
-
-      /*
-       * Never expose the real results as a fallback.
-       * That would destroy the joke.
-       */
-
-      return res.json({
-
-        mode: "answer",
-
-        answerMode: "troll",
-
-        count: "0",
-
-        answer:
-          "TROOLLgel had a perfectly good answer, but it wandered off.",
-
-        results: []
-
-      });
-
+      originalResults = [];
     }
 
 
     /*
-     * Determine whether this request has
-     * a useful CONTRA category.
-     */
-
-    const contraQuery =
-      getContraQuery(query);
-
-
-    /*
-     * No contra category:
+     * STEP 2
      *
-     * Just show the troll answer.
+     * Questions and recommendation searches
+     * get a TROOLLgel answer.
      */
+    if (isQuestion(query)) {
 
-    if (!contraQuery) {
+      try {
 
-      return res.json({
-
-        mode: "answer",
-
-        answerMode: "troll",
-
-        count:
-          String(webResults.length),
-
-        answer,
-
-        results: []
-
-      });
-
-    }
+        const answer =
+          await trollAnswer(query);
 
 
-    /*
-     * CONTRA SEARCH
-     *
-     * Search the opposite category.
-     */
+        /*
+         * Only practical/recommendation queries get
+         * real links underneath the joke.
+         *
+         * Factual questions such as gravity/sky/etc.
+         * get NO links.
+         */
+        let counterResults = [];
 
-    let contraResults = [];
+
+        if (shouldShowCounterLinks(query)) {
+
+          try {
+
+            const counterQuery =
+              await counterSearchQuery(query);
 
 
-    try {
+            console.log(
+              "COUNTER SEARCH QUERY:",
+              counterQuery
+            );
 
-      contraResults =
-        await tavilySearch(
-          contraQuery
+
+            if (counterQuery) {
+
+              counterResults =
+                await tavilySearch(counterQuery);
+            }
+
+          } catch (error) {
+
+            console.error(
+              "COUNTER SEARCH FAILED:",
+              error.message
+            );
+          }
+        }
+
+
+        return res.json({
+
+          mode: "answer",
+
+          count:
+            String(
+              counterResults.length ||
+              originalResults.length
+            ),
+
+          answer,
+
+          results:
+            counterResults
+
+        });
+
+
+      } catch (error) {
+
+        /*
+         * If OpenAI fails, do not expose internal
+         * errors to the visitor.
+         */
+        console.error(
+          "TROOLLgel AI failed:",
+          error.message
         );
 
-    } catch (error) {
 
-      console.error(
-        "CONTRA SEARCH ERROR:",
-        error.message
-      );
+        /*
+         * We still return a harmless fallback joke.
+         */
+        return res.json({
 
-      contraResults = [];
+          mode: "answer",
 
+          count: "0",
+
+          answer:
+            "The answer is currently hiding behind a suspiciously convenient curtain.",
+
+          results: []
+
+        });
+      }
     }
 
 
     /*
-     * Return the troll answer PLUS
-     * the opposite-category results.
+     * STEP 3
      *
-     * The frontend can display these
-     * underneath the answer.
+     * Normal search query.
      */
-
     return res.json({
 
-      mode: "answer",
-
-      answerMode: "troll",
+      mode: "results",
 
       count:
-        String(
-          contraResults.length ||
-          webResults.length
-        ),
+        String(originalResults.length),
 
-      answer,
+      answer: "",
 
-      contraQuery,
-
-      contraResults
+      results:
+        originalResults
 
     });
 
