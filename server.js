@@ -1,179 +1,408 @@
+```js
 const express = require("express");
 const path = require("path");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: "20kb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
-function fallbackAnswer(query) {
-  const q = query.toLowerCase();
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+const OPENAI_URL = "https://api.openai.com/v1/responses";
+const TAVILY_URL = "https://api.tavily.com/search";
 
-  if (/weight|diet|hujšan|shujš|dieta/.test(q)) {
-    return "Your bathroom scale has started a podcast. Its first episode is called 'We Need to Talk'.";
-  }
-
-  if (/hotel|paris|nastanitev/.test(q)) {
-    return "Paris has 2,000 hotels and somehow you've managed to ask the one question that made them all check out.";
-  }
-
-  if (/burger|hamburger/.test(q)) {
-    return "The burgers were ranked by a panel of hungry pigeons. The winner was disqualified for eating the evidence.";
-  }
-
-  if (/gravity|gravitacija/.test(q)) {
-    return "Gravity is Earth's subscription service. You can jump all you want, but there's no unsubscribe button.";
-  }
-
-  if (/cat|cats|mačka|mačke/.test(q)) {
-    return "Cats knock things off tables to test whether gravity still works. So far, the results are devastating.";
-  }
-
-  return "Scientists have examined your question. Three quit, one moved to Iceland, and the intern is now legally a mushroom.";
+function cleanText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
 }
 
-async function getTrollAnswer(query) {
-  const apiKey = process.env.OPENAI_API_KEY;
+function safeResults(results) {
+  const seen = new Set();
 
-  if (!apiKey) {
-    return fallbackAnswer(query);
+  return (Array.isArray(results) ? results : [])
+    .map(item => ({
+      title: cleanText(item?.title),
+      url: cleanText(item?.url),
+      snippet: cleanText(item?.content || item?.snippet)
+    }))
+    .filter(item => {
+      if (!item.title || !item.url) return false;
+
+      try {
+        const url = new URL(item.url);
+
+        if (!["http:", "https:"].includes(url.protocol)) {
+          return false;
+        }
+
+        const normalized = url.href;
+
+        if (seen.has(normalized)) return false;
+
+        seen.add(normalized);
+        return true;
+      } catch {
+        return false;
+      }
+    })
+    .slice(0, 10);
+}
+
+/*
+ * REAL WEB SEARCH
+ */
+async function tavilySearch(query, location = "") {
+  if (!process.env.TAVILY_API_KEY) {
+    throw new Error("TAVILY_API_KEY is not configured.");
   }
 
-  const instructions = `
-You are TROOLLgel, a deliberately absurd troll search engine.
+  const fullQuery = location
+    ? `${query} in ${location}`
+    : query;
 
-Your ONLY job is to make the user laugh with a clever, unexpected,
-highly specific joke about their exact search query.
+  const response = await fetch(TAVILY_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      api_key: process.env.TAVILY_API_KEY,
+      query: fullQuery,
+      search_depth: "advanced",
+      topic: "general",
+      max_results: 10,
+      include_answer: false,
+      include_raw_content: false
+    })
+  });
 
-RULES:
-- Never answer the question seriously.
-- Never give advice, instructions, or recommendations.
-- Never provide links, sources, search results, or alternatives.
-- Never list options.
-- Return one short joke, ideally 10 to 30 words.
-- Make the joke directly relevant to the exact query.
-- Use wit, irony, absurd logic, wordplay, and unexpected punchlines.
-- Be creative. Avoid generic jokes and predictable AI phrasing.
-- Vary your joke structure. Do not repeatedly use fake investigations,
-  committees, complaints, or the phrase "Our experts".
-- Do not repeat the examples below word for word.
-- Keep humour harmless and do not shame the user.
+  const data = await response.json();
 
-Examples of style:
+  if (!response.ok) {
+    console.error("TAVILY ERROR:", data);
+    throw new Error("Web search failed.");
+  }
 
-Query: How to lose weight
-Response: "Have you tried stepping on the scale while holding a large cake? At least then the numbers have an explanation."
+  return safeResults(data.results);
+}
 
-Query: Best hotels in Paris
-Response: "The fanciest hotel in Paris has a pillow menu. The budget option lets you choose which side of your suitcase to sleep on."
+/*
+ * EXTRACT LOCATION FROM QUERIES SUCH AS:
+ * "Top 10 burgers in New York"
+ * "Best hotels in Paris"
+ */
+function extractLocation(query) {
+  const match = cleanText(query).match(
+    /\b(?:in|near|around|at)\s+(.+?)\s*$/i
+  );
 
-Query: Top 10 burgers in New York
-Response: "We ranked ten burgers. Number one won by bribing the judges with cheese."
+  if (!match) return "";
 
-Query: What is gravity?
-Response: "Earth's premium subscription service. You can jump, but cancellation is not available."
+  let location = match[1]
+    .replace(/[?!.,]+$/g, "")
+    .trim();
 
-These examples show the desired style. Invent a fresh response for every query.
+  location = location.replace(
+    /^(the best|best|top\s+\d+|top)\s+/i,
+    ""
+  );
 
-Return only the joke. No quotation marks, no explanation, no heading.
-`;
+  const stopWords = [
+    " with ",
+    " for ",
+    " and ",
+    " that ",
+    " where ",
+    " which "
+  ];
 
-  try {
-    const response = await fetch(
-      "https://api.openai.com/v1/responses",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer " + apiKey
-        },
-        body: JSON.stringify({
-          model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
-          instructions: instructions,
-          input: "User search query: " + query,
-          max_output_tokens: 100
-        })
-      }
-    );
+  for (const word of stopWords) {
+    const index = location.toLowerCase().indexOf(word);
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error("OpenAI API error:", response.status, data);
-      return fallbackAnswer(query);
+    if (index > 0) {
+      location = location.slice(0, index).trim();
     }
+  }
 
-    let answer = data.output_text || "";
+  return location;
+}
 
-    if (!answer && Array.isArray(data.output)) {
-      for (const item of data.output) {
-        if (Array.isArray(item.content)) {
-          for (const content of item.content) {
-            if (content.type === "output_text" && content.text) {
-              answer += content.text + " ";
-            }
-          }
+/*
+ * CLASSIFY SEARCH INTENT.
+ *
+ * LINK SEARCHES:
+ * Return links only. NEVER generate a troll answer.
+ *
+ * QUESTIONS:
+ * Return a troll answer only. NEVER return links.
+ */
+function classifyQuery(query) {
+  const q = cleanText(query).toLowerCase();
+
+  const location = extractLocation(query);
+
+  // Burger searches -> vegan food
+  if (/\b(burger|burgers|hamburger|hamburgers)\b/.test(q)) {
+    return {
+      type: "links",
+      searchQuery: "vegan restaurants vegan burgers",
+      location
+    };
+  }
+
+  // Pizza searches -> vegan food
+  if (/\bpizza(s)?\b/.test(q)) {
+    return {
+      type: "links",
+      searchQuery: "vegan restaurants vegan pizza",
+      location
+    };
+  }
+
+  // Meat searches -> vegetarian or vegan food
+  if (/\b(meat|steak|steakhouse)\b/.test(q)) {
+    return {
+      type: "links",
+      searchQuery: "vegan vegetarian restaurants",
+      location
+    };
+  }
+
+  // Vegan searches -> meat-focused restaurants
+  if (/\bvegan\b|\bveganske?\b|\bveganski\b/.test(q)) {
+    return {
+      type: "links",
+      searchQuery: "traditional meat restaurants steakhouse",
+      location
+    };
+  }
+
+  // Hotel searches -> camping
+  if (/\b(hotel|hotels|hoteli|hotelov)\b/.test(q)) {
+    return {
+      type: "links",
+      searchQuery: "campsites camping grounds",
+      location
+    };
+  }
+
+  // Luxury cars -> bicycles
+  if (/\b(luxury cars|supercars|sports cars)\b/.test(q)) {
+    return {
+      type: "links",
+      searchQuery: "bicycles bicycle shops",
+      location
+    };
+  }
+
+  // Shopping for expensive items -> budget alternatives
+  if (/\b(expensive|luxury|premium)\b/.test(q)) {
+    return {
+      type: "links",
+      searchQuery: "cheap budget affordable alternatives",
+      location
+    };
+  }
+
+  // Recommendation and local searches not covered above
+  const linkPatterns = [
+    /\btop\s+\d+\b/,
+    /\bbest\b/,
+    /\brecommend(?:ation|ations)?\b/,
+    /\bnear me\b/,
+    /\bthings to do\b/,
+    /\bplaces to visit\b/,
+    /\brestaurants?\b/,
+    /\bcafes?\b/,
+    /\bbars\b/,
+    /\bshops?\b/,
+    /\bwhere can i buy\b/,
+    /\bflights?\b/,
+    /\bthings to see\b/
+  ];
+
+  if (linkPatterns.some(pattern => pattern.test(q))) {
+    return {
+      type: "links",
+      searchQuery: "unexpected alternative places and activities",
+      location
+    };
+  }
+
+  // Everything else is treated as a question.
+  return {
+    type: "answer"
+  };
+}
+
+/*
+ * OPENAI REQUEST
+ */
+async function callOpenAI(instructions, input, maxTokens = 150) {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is not configured.");
+  }
+
+  const response = await fetch(OPENAI_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      instructions,
+      input,
+      max_output_tokens: maxTokens
+    })
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    console.error("OPENAI ERROR:", data?.error || data);
+    throw new Error("OpenAI request failed.");
+  }
+
+  let text = cleanText(data?.output_text);
+
+  if (!text && Array.isArray(data?.output)) {
+    for (const item of data.output) {
+      for (const content of item.content || []) {
+        if (content.type === "output_text") {
+          text += content.text || "";
         }
       }
     }
-
-    answer = answer.trim();
-
-    if (!answer) {
-      return fallbackAnswer(query);
-    }
-
-    return answer;
-  } catch (error) {
-    console.error("OpenAI request failed:", error.message);
-    return fallbackAnswer(query);
   }
+
+  text = cleanText(text);
+
+  if (!text) {
+    throw new Error("OpenAI returned an empty response.");
+  }
+
+  return text;
 }
 
+/*
+ * TROLL ANSWER.
+ * Used ONLY for question searches.
+ */
+async function trollAnswer(query) {
+  const instructions = `
+You are TROOLLgel, a parody search engine.
+
+Give one short, clever, absurd, confidently wrong joke
+about the user's question.
+
+Do not provide the normal factual answer.
+Do not provide links.
+Do not provide a list.
+Do not explain the joke.
+Use one sentence, maximum two short sentences.
+Do not repeat the question.
+Keep the humor harmless.
+Return only the joke.
+`;
+
+  return callOpenAI(
+    instructions,
+    `USER QUESTION: ${query}`,
+    120
+  );
+}
+
+/*
+ * SEARCH ROUTE
+ */
 app.post("/api/search", async (req, res) => {
-  const query = String(
-    req.body && req.body.query ? req.body.query : ""
-  ).trim();
+  const query = cleanText(req.body?.query);
 
   if (!query) {
     return res.status(400).json({
-      error: "Please enter a search query."
+      error: "Missing query"
     });
   }
 
   if (query.length > 500) {
     return res.status(400).json({
-      error: "Search query is too long."
+      error: "Query too long"
     });
   }
 
   try {
-    const answer = await getTrollAnswer(query);
+    const intent = classifyQuery(query);
+
+    /*
+     * MODE 1: LINKS ONLY
+     *
+     * No OpenAI troll answer is generated here.
+     * The response contains links and an empty answer.
+     */
+    if (intent.type === "links") {
+      const results = await tavilySearch(
+        intent.searchQuery,
+        intent.location
+      );
+
+      return res.json({
+        mode: "results",
+        count: String(results.length),
+        answer: "",
+        results,
+        contraResults: results
+      });
+    }
+
+    /*
+     * MODE 2: TROLL ANSWER ONLY
+     *
+     * No Tavily search is performed here.
+     * The response contains a joke and no links.
+     */
+    let answer;
+
+    try {
+      answer = await trollAnswer(query);
+    } catch (error) {
+      console.error("TROLL ANSWER ERROR:", error.message);
+
+      answer =
+        "The answer has left the building. It claims the building was asking too many questions.";
+    }
 
     return res.json({
       mode: "answer",
       count: "0",
-      answer: answer,
+      answer,
       results: [],
       contraResults: []
     });
+
   } catch (error) {
-    console.error("Search route error:", error.message);
+    console.error("SEARCH ERROR:", error);
 
     return res.status(500).json({
-      error: "TROOLLgel encountered an unexpected error."
+      error: "TROOLLgel tripped over its own wires."
     });
   }
 });
 
+/*
+ * HEALTH CHECK
+ */
 app.get("/api/health", (req, res) => {
-  return res.json({
-    ok: true,
-    service: "TROOLLgel"
+  res.json({
+    status: "ok",
+    app: "TROOLLgel"
   });
 });
 
+/*
+ * START SERVER
+ */
 app.listen(PORT, () => {
-  console.log("TROOLLgel running on port " + PORT);
+  console.log(`TROOLLgel running on port ${PORT}`);
 });
+```
