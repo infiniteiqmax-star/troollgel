@@ -16,11 +16,12 @@ function cleanText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
 
-function getLocation(query) {
-  const q = cleanText(query);
+/* ---------------------------------
+   LOCATION
+--------------------------------- */
 
-  // Supports locations such as Ljubljana, New York and Los Angeles.
-  const match = q.match(
+function getLocation(query) {
+  const match = cleanText(query).match(
     /\b(?:in|near)\s+([A-Za-zÀ-ž][A-Za-zÀ-ž.'-]*(?:\s+[A-Za-zÀ-ž][A-Za-zÀ-ž.'-]*){0,3})/i
   );
 
@@ -31,110 +32,136 @@ function getLocation(query) {
     .trim();
 }
 
+/* ---------------------------------
+   SEARCH INTENT
+
+   1. Simple factual questions:
+      troll answer only.
+
+   2. Recommendation searches:
+      alternative links only.
+
+   3. Advice/how-to searches:
+      troll answer + alternative links.
+
+   4. Everything else:
+      normal search results.
+--------------------------------- */
+
+function isRecommendationSearch(query) {
+  const q = cleanText(query).toLowerCase();
+
+  return /\b(best|top\s*\d*|\d+\s+best|recommend|recommendations|near me|where to eat|restaurants?|burgers?|fast food|pizzas?|hotels?|accommodation|things to do|places to visit|attractions|buy|shopping|products?|compare|comparison)\b/.test(q);
+}
+
+function isAdviceSearch(query) {
+  const q = cleanText(query).toLowerCase();
+
+  return /\b(how to lose|how do i|how can i|ways to lose|tips for|guide to|workout plan|training plan|exercise routine|meal plan|healthy diet|lose weight|weight loss|weight-loss|improve my|learn to|how to start|how to get better)\b/.test(q);
+}
+
 function isSimpleFactQuestion(query) {
   const q = cleanText(query).toLowerCase();
 
-  if (
-    /\b(best|top|recommend|restaurants?|burgers?|pizza|hotels?|lose weight|weight loss|how to|where to|things to do|places to visit|buy|shopping|workout|training plan)\b/.test(q)
-  ) {
+  if (isRecommendationSearch(q) || isAdviceSearch(q)) {
     return false;
   }
 
   return (
     q.endsWith("?") ||
-    /^(what|why|how|when|where|who|which|can|could|would|should|is|are|do|does|did|will|has|have|explain|tell me)\b/i.test(q)
+    /^(what is|what are|why is|why are|why do|how does|how do|when did|when is|who is|who was|can dogs|can humans|explain)\b/.test(q)
   );
 }
 
-function needsTrollAndLinks(query) {
-  const q = cleanText(query).toLowerCase();
+/* ---------------------------------
+   ALTERNATIVE SEARCH QUERIES
 
-  return /\b(best|top\s*\d*|\d+\s+best|recommend|near me|where to eat|places to visit|things to do|restaurants?|burgers?|fast food|pizzas?|hotels?|flights?|travel|vacation|lose weight|weight loss|weight-loss|how to lose|ways to lose|best way to|how to|tips for|guide to|workout plan|training plan|exercise routine|meal plan|healthy diet|buy|shopping|products?|compare)\b/.test(q);
-}
+   Recommendation searches show links
+   only, without a troll answer.
+
+   Alternatives should be related to
+   the original topic and location.
+--------------------------------- */
 
 function makeAlternativeQueries(query) {
   const q = cleanText(query).toLowerCase();
   const location = getLocation(query);
   const where = location ? ` in ${location}` : "";
 
-  // Burger searches: vegan alternatives in the SAME location.
+  // Burgers -> vegan/plant-based options
+  // in the same city, not the original burger list.
   if (/\b(burger|burgers|fast food)\b/.test(q)) {
     return [
       `vegan burger restaurants${where}`,
       `vegan restaurants with burgers${where}`,
-      `plant based burger places${where}`
+      `plant based restaurants${where}`
     ];
   }
 
-  // Pizza searches: plant-based alternatives in the SAME location.
+  // Pizza -> vegan alternatives in the same location.
   if (/\bpizzas?\b/.test(q)) {
     return [
       `vegan pizza restaurants${where}`,
-      `plant based restaurants${where}`,
-      `vegetarian restaurants${where}`
+      `vegan restaurants${where}`,
+      `plant based restaurants${where}`
     ];
   }
 
-  // Weight-loss searches: different related perspectives,
-  // not ordinary weight-loss plans or repeated body-neutrality pages.
-  if (
-    /\b(lose weight|weight loss|weight-loss|how to lose|ways to lose|best way to lose)\b/.test(q)
-  ) {
-    return [
-      "intuitive eating and relationship with food resources",
-      "diet culture myths and evidence based articles",
-      "body image wellbeing and body neutrality resources"
-    ];
-  }
-
-  if (/\b(restaurant|restaurants|food|vegan|vegetarian|where to eat)\b/.test(q)) {
+  // Other restaurant searches.
+  if (/\b(restaurant|restaurants|where to eat|food)\b/.test(q)) {
     return [
       `vegan restaurants${where}`,
       `vegetarian restaurants${where}`,
-      `plant based food places${where}`
+      `plant based food${where}`
+    ];
+  }
+
+  // Advice about weight loss: alternative perspectives.
+  if (/\b(lose weight|weight loss|weight-loss|diet|calorie)\b/.test(q)) {
+    return [
+      "intuitive eating and relationship with food",
+      "evidence based articles about diet culture and crash diets",
+      "body image wellbeing and body neutrality resources"
     ];
   }
 
   if (/\b(hotel|hotels|accommodation)\b/.test(q)) {
     return [
-      `alternative accommodation and hostels${where}`,
-      `camping and unusual places to stay${where}`,
-      `budget guesthouses${where}`
+      `hostels and budget accommodation${where}`,
+      `camping and alternative accommodation${where}`,
+      `guesthouses and apartments${where}`
     ];
   }
 
   if (/\b(workout|training plan|exercise routine|fitness|gym)\b/.test(q)) {
     return [
-      "recreational sports and unusual outdoor activities",
-      "mobility walking and everyday movement",
-      "beginner friendly activities outside the gym"
+      "outdoor activities and recreational sports",
+      "mobility and everyday movement",
+      "beginner friendly exercise alternatives"
     ];
   }
 
   if (/\b(travel|vacation|holiday|things to do|places to visit|attractions)\b/.test(q)) {
     return [
       `unusual local experiences${where}`,
-      `free parks markets museums and local activities${where}`,
+      `parks museums and local activities${where}`,
       `lesser known attractions${where}`
     ];
   }
 
-  if (/\b(buy|products?|shopping|laptop|computer|phone|headphones|shoes)\b/.test(q)) {
-    return [
-      `${query} alternatives`,
-      `${query} independent comparisons`,
-      `${query} budget alternatives`
-    ];
-  }
-
+  // General advice queries.
   return [
-    `${query} alternatives`,
-    `${query} unusual alternatives`,
-    `${query} different perspectives`
+    `${query} alternative perspectives`,
+    `${query} myths and misconceptions`,
+    `${query} research and resources`
   ];
 }
 
-async function tavilySearch(query) {
+/* ---------------------------------
+   TAVILY SEARCH
+--------------------------------- */
+
+async function tavilySearch(query, maxResults = 8) {
   if (!process.env.TAVILY_API_KEY) {
     throw new Error("TAVILY_API_KEY is not configured.");
   }
@@ -149,7 +176,7 @@ async function tavilySearch(query) {
       query,
       search_depth: "advanced",
       topic: "general",
-      max_results: 8,
+      max_results: maxResults,
       include_answer: false,
       include_raw_content: false
     })
@@ -179,32 +206,20 @@ async function tavilySearch(query) {
       return {
         title: cleanText(item.title) || "Search result",
         url,
-        snippet: cleanText(item.content || item.snippet).slice(0, 300)
+        snippet: cleanText(item.content || item.snippet).slice(0, 320)
       };
     })
     .filter(item => item.url && item.title);
 }
 
-async function searchAlternatives(queries) {
-  const batches = await Promise.all(
-    queries.map(async query => {
-      try {
-        console.log("ALTERNATIVE SEARCH:", query);
+/* ---------------------------------
+   MERGE RESULTS
 
-        const results = await tavilySearch(query);
+   Remove duplicate URLs and titles.
+   Do not invent links.
+--------------------------------- */
 
-        // Keep the query alongside the results for diagnostics.
-        return results.map(item => ({
-          ...item,
-          searchQuery: query
-        }));
-      } catch (error) {
-        console.error("SEARCH FAILED:", query, error.message);
-        return [];
-      }
-    })
-  );
-
+function mergeResults(batches, limit = 8) {
   const seenUrls = new Set();
   const seenTitles = new Set();
   const combined = [];
@@ -216,7 +231,8 @@ async function searchAlternatives(queries) {
         .replace(/\/+$/, "")
         .toLowerCase();
 
-      const titleKey = item.title.toLowerCase()
+      const titleKey = item.title
+        .toLowerCase()
         .replace(/[^a-z0-9]+/g, " ")
         .trim();
 
@@ -226,54 +242,72 @@ async function searchAlternatives(queries) {
       seenUrls.add(urlKey);
       seenTitles.add(titleKey);
 
-      // Do not expose internal diagnostic metadata to the frontend.
       combined.push({
         title: item.title,
         url: item.url,
         snippet: item.snippet
       });
+
+      if (combined.length >= limit) {
+        return combined;
+      }
     }
   }
 
-  // Do not fill missing alternatives with ordinary search results.
-  return combined.slice(0, 8);
+  return combined;
 }
+
+async function searchAlternatives(queries) {
+  const batches = await Promise.all(
+    queries.map(async query => {
+      try {
+        console.log("ALTERNATIVE SEARCH:", query);
+        return await tavilySearch(query, 5);
+      } catch (error) {
+        console.error("ALTERNATIVE SEARCH FAILED:", query, error.message);
+        return [];
+      }
+    })
+  );
+
+  return mergeResults(batches, 8);
+}
+
+/* ---------------------------------
+   TROLL ANSWER
+--------------------------------- */
 
 async function trollAnswer(query) {
   if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is not configured.");
+    console.error("OPENAI_API_KEY is not configured.");
+    return fallbackTrollAnswer(query);
   }
 
   const instructions = `
 You are TROOLLgel, a parody search engine.
 
-Return ONE short, absurd, witty, deadpan joke.
-The joke is not an answer to the user's question.
+Return exactly ONE short, absurd, witty, deadpan joke.
 
 STRICT RULES:
-- Never answer the question normally.
-- Never give advice, instructions, tips, recommendations or a plan.
-- Never explain facts.
-- Never add a helpful sentence after the joke.
-- Never tell the user what they should do.
-- Invent a ridiculous imaginary situation related to the search.
+- Do not answer the question normally.
+- Do not provide advice, instructions, tips or recommendations.
+- Do not explain facts.
+- Do not add a helpful sentence after the joke.
 - Do not give a list.
+- Make a ridiculous imaginary claim related to the query.
 - Return only the joke.
+- Keep jokes harmless for sensitive or dangerous topics.
 
 Examples:
-"What is gravity?" ->
+
+"What is gravity?"
 "Gravity is Earth's clingy way of saying, 'No running off with the furniture.'"
 
-"10 best burgers in Ljubljana" ->
-"Ljubljana's burgers have been summoned to city hall to explain the suspicious pickle shortage."
+"How to lose weight"
+"The bathroom scale has declared independence and now weighs everyone emotionally."
 
-"How to lose weight" ->
-"The bathroom scale has hired a lawyer and is refusing to discuss its numbers."
-
-"Best pizza in New York" ->
-"New York's pizzas are competing for custody of the moon."
-
-For dangerous or sensitive topics, keep the joke harmless.
+Do not give a joke about burgers when the query is about weight loss.
+Make the joke relevant to the actual query.
 `;
 
   try {
@@ -294,8 +328,9 @@ For dangerous or sensitive topics, keep the joke harmless.
     const data = await response.json();
 
     if (!response.ok) {
-      console.error("OPENAI ERROR:", JSON.stringify(data.error));
-      throw new Error(data.error?.message || "OpenAI request failed.");
+      throw new Error(
+        data.error?.message || "OpenAI request failed."
+      );
     }
 
     let answer = cleanText(data.output_text);
@@ -317,7 +352,7 @@ For dangerous or sensitive topics, keep the joke harmless.
     }
 
     const advicePattern =
-      /\b(you should|you can|try to|try |remember to|the best way|it is important|here are|first,|start by|make sure|aim to|focus on|eat less|exercise more|consult a doctor)\b/i;
+      /\b(you should|you can|try to|try |remember to|the best way|it is important|here are|start by|make sure|aim to|focus on|eat less|exercise more|consult a doctor)\b/i;
 
     if (advicePattern.test(answer)) {
       return fallbackTrollAnswer(query);
@@ -338,11 +373,11 @@ function fallbackTrollAnswer(query) {
   }
 
   if (/\b(burger|burgers|fast food)\b/.test(q)) {
-    return "The burgers have formed a union and are demanding better buns before they reveal their location.";
+    return "The burgers have formed a union and are demanding better buns before revealing their location.";
   }
 
-  if (/\b(lose weight|weight loss|weight-loss|diet)\b/.test(q)) {
-    return "The bathroom scale has hired a lawyer and is refusing to discuss its numbers.";
+  if (/\b(lose weight|weight loss|weight-loss|diet|calorie)\b/.test(q)) {
+    return "The bathroom scale has declared independence and now weighs everyone emotionally.";
   }
 
   if (/\bpizza\b/.test(q)) {
@@ -351,6 +386,10 @@ function fallbackTrollAnswer(query) {
 
   return "TROOLLgel has reached a conclusion. The conclusion has declined to comment and is wearing a tiny disguise.";
 }
+
+/* ---------------------------------
+   API ENDPOINT
+--------------------------------- */
 
 app.post("/api/search", async (req, res) => {
   const query = cleanText(req.body?.query);
@@ -368,7 +407,11 @@ app.post("/api/search", async (req, res) => {
   }
 
   try {
-    // Simple factual questions: joke only, no links.
+    /*
+     * CASE 1:
+     * Simple factual questions.
+     * Troll answer only. No links.
+     */
     if (isSimpleFactQuestion(query)) {
       const answer = await trollAnswer(query);
 
@@ -376,46 +419,75 @@ app.post("/api/search", async (req, res) => {
         mode: "answer",
         count: "0",
         answer,
-        contraResults: [],
-        results: []
+        results: [],
+        contraResults: []
       });
     }
 
-    // Practical searches: joke plus alternative web results.
-    if (needsTrollAndLinks(query)) {
-      const answerPromise = trollAnswer(query);
+    /*
+     * CASE 2:
+     * Recommendation searches.
+     *
+     * Only alternative links.
+     * No troll answer.
+     *
+     * Do not fall back to the original search
+     * if alternatives are unavailable.
+     */
+    if (isRecommendationSearch(query)) {
       const alternativeQueries = makeAlternativeQueries(query);
+      const results = await searchAlternatives(alternativeQueries);
 
-      let results = await searchAlternatives(alternativeQueries);
+      return res.json({
+        mode: "results",
+        count: String(results.length),
+        answer: "",
+        results,
+        contraResults: []
+      });
+    }
 
-      // Do NOT fall back to the original search.
-      // That would show the very results the user wanted alternatives to.
-      const answer = await answerPromise;
+    /*
+     * CASE 3:
+     * Advice/how-to searches.
+     *
+     * Troll answer plus related alternatives.
+     */
+    if (isAdviceSearch(query)) {
+      const [answer, results] = await Promise.all([
+        trollAnswer(query),
+        searchAlternatives(makeAlternativeQueries(query))
+      ]);
 
       return res.json({
         mode: "answer",
         count: String(results.length),
         answer,
-        contraResults: results,
-        results
+        results,
+        contraResults: results
       });
     }
 
-    // Other searches: joke plus results for the original query.
-    const [answer, results] = await Promise.all([
-      trollAnswer(query),
-      tavilySearch(query).catch(error => {
-        console.error("WEB SEARCH FAILED:", error.message);
-        return [];
-      })
-    ]);
+    /*
+     * CASE 4:
+     * Ordinary searches.
+     *
+     * Real results only, without a joke.
+     */
+    let results = [];
+
+    try {
+      results = await tavilySearch(query, 10);
+    } catch (error) {
+      console.error("NORMAL SEARCH FAILED:", error.message);
+    }
 
     return res.json({
-      mode: "answer",
+      mode: "results",
       count: String(results.length),
-      answer,
-      contraResults: results,
-      results
+      answer: "",
+      results,
+      contraResults: []
     });
   } catch (error) {
     console.error("SEARCH ERROR:", error);
