@@ -16,9 +16,17 @@ function cleanText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
 
-function isLocalRestaurantQuery(query) {
-  return /\b(burger|burgers|fast food|pizza|restaurant|restaurants|where to eat|vegan|vegetarian)\b/i
-    .test(query);
+function isQuestion(query) {
+  const q = cleanText(query).toLowerCase();
+
+  // An explicit question mark normally signals a question,
+  // unless it is clearly asking for recommendations.
+  if (isRecommendationSearch(q)) return false;
+
+  return (
+    q.endsWith("?") ||
+    /^(what|why|how|when|where|who|which|can|could|would|should|is|are|do|does|did|will|has|have|explain|tell me)\b/i.test(q)
+  );
 }
 
 function isRecommendationSearch(query) {
@@ -27,7 +35,6 @@ function isRecommendationSearch(query) {
   const patterns = [
     /\btop\s*\d*\b/,
     /\bbest\b/,
-    /\b10\s+best\b/,
     /\b\d+\s+(best|top)\b/,
     /\brecommend(?:ation|ations|ed)?\b/,
     /\bnear me\b/,
@@ -42,25 +49,32 @@ function isRecommendationSearch(query) {
     /\bvegan\b/,
     /\bvegetarian\b/,
     /\bshops?\b/,
+    /\bproducts?\b/,
     /\bbuy\b/,
-    /\bproducts?\b/
+    /\bshopping\b/,
+    /\blose weight\b/,
+    /\bweight loss\b/,
+    /\bweight-loss\b/,
+    /\bhow to lose\b/,
+    /\bways to lose\b/,
+    /\bworkout plan\b/,
+    /\btraining plan\b/,
+    /\bexercise routine\b/,
+    /\bmeal plan\b/,
+    /\bhealthy diet\b/,
+    /\bget fit\b/,
+    /\blearn poker\b/,
+    /\bbest way to\b/,
+    /\bhow to\b/,
+    /\bguide to\b/,
+    /\btips for\b/,
+    /\bideas for\b/,
+    /\balternatives to\b/,
+    /\bcompare\b/,
+    /\bvs\.?\b/
   ];
 
   return patterns.some(pattern => pattern.test(q));
-}
-
-function isSimpleQuestion(query) {
-  const q = cleanText(query).toLowerCase();
-
-  if (isRecommendationSearch(q)) {
-    return false;
-  }
-
-  return (
-    q.endsWith("?") ||
-    /^(what|why|how|when|where|who|which|can|could|would|should|is|are|do|does|did|will|has|have|explain|tell me)\b/i
-      .test(q)
-  );
 }
 
 function getLocation(query) {
@@ -71,41 +85,54 @@ function getLocation(query) {
   return match ? cleanText(match[1]) : "";
 }
 
-function makeAlternativeQuery(query) {
+function makeSearchQueries(query) {
   const q = cleanText(query).toLowerCase();
   const location = getLocation(query);
   const where = location ? ` in ${location}` : "";
 
+  // Burger searches redirect to vegan alternatives.
   if (/\b(burger|burgers|fast food)\b/.test(q)) {
     return [
-      `vegan restaurants${where} official websites menus`,
-      `vegan burgers${where} restaurant menu`,
+      `vegan restaurants${where} menus`,
+      `vegan burgers${where}`,
       `plant based restaurants${where}`
     ];
   }
 
-  if (/\bpizza\b/.test(q)) {
+  // Pizza searches redirect to vegan alternatives.
+  if (/\bpizzas?\b/.test(q)) {
     return [
-      `vegan restaurants${where} official websites menus`,
+      `vegan restaurants${where} menus`,
       `plant based restaurants${where}`
     ];
   }
 
+  // Vegan and vegetarian searches.
   if (/\b(vegan|vegetarian)\b/.test(q)) {
     return [
-      `vegan restaurants${where} official websites menus`,
-      `vegetarian restaurants${where} menus`
+      `${query} restaurants menus`,
+      `vegan restaurants${where} official websites`
     ];
   }
 
+  // Keep the original topic for health, fitness and advice.
+  // These are informational searches, not troll questions.
+  if (
+    /\b(lose weight|weight loss|weight-loss|how to lose|ways to lose|workout|training plan|exercise routine|meal plan|healthy diet|get fit|sleep better|stress management)\b/.test(q)
+  ) {
+    return [query, `${query} evidence based advice`];
+  }
+
+  // General recommendation searches should retain their topic.
   if (/\b(restaurant|restaurants|where to eat|food)\b/.test(q)) {
     return [
-      `vegetarian restaurants${where} official websites menus`,
-      `vegan restaurants${where} menus`
+      query,
+      `alternative restaurants${where} menus`
     ];
   }
 
-  return [];
+  // For other recommendations, search the original query.
+  return [query];
 }
 
 async function tavilySearch(query) {
@@ -142,6 +169,7 @@ async function tavilySearch(query) {
 
       try {
         const parsed = new URL(item.url);
+
         if (["http:", "https:"].includes(parsed.protocol)) {
           url = parsed.href;
         }
@@ -152,7 +180,7 @@ async function tavilySearch(query) {
       return {
         title: cleanText(item.title) || "Search result",
         url,
-        snippet: cleanText(item.content || item.snippet).slice(0, 220)
+        snippet: cleanText(item.content || item.snippet).slice(0, 240)
       };
     })
     .filter(item => item.url);
@@ -193,16 +221,15 @@ async function searchMultiple(queries) {
 
 function rankResults(results, query) {
   const q = cleanText(query).toLowerCase();
-  const restaurantQuery = isLocalRestaurantQuery(q);
-  const burgerQuery = /\b(burger|burgers|fast food)\b/.test(q);
+  const isBurgerSearch = /\b(burger|burgers|fast food)\b/.test(q);
+  const isVeganSearch = /\b(vegan|plant-based|plant based)\b/.test(q);
+  const isRestaurantSearch =
+    /\b(restaurant|restaurants|food|pizza|burger|burgers|vegan|vegetarian)\b/.test(q);
 
   const articleTerms = [
-    "travel blog",
-    "food blog",
+    "personal blog",
     "my favourite",
     "my favorite",
-    "things to do",
-    "travel guide",
     "blog for travelling",
     "blog for traveling"
   ];
@@ -218,7 +245,7 @@ function rankResults(results, query) {
         score += 2;
       }
 
-      if (/\b(ljubljana|slovenia)\b/.test(text)) {
+      if (/\b(ljubljana|slovenia|new york)\b/.test(text)) {
         score += 3;
       }
 
@@ -226,30 +253,34 @@ function rankResults(results, query) {
         score += 3;
       }
 
-      if (/\b(vegan|plant-based|plant based)\b/.test(text)) {
-        score += 5;
+      if (isVeganSearch && /\b(vegan|plant-based|plant based)\b/.test(text)) {
+        score += 4;
       }
 
-      if (burgerQuery && /\b(gluten-free|gluten free|celiac|coeliac)\b/.test(text)) {
-        score -= 5;
+      if (isBurgerSearch && /\b(vegan|plant-based|plant based)\b/.test(text)) {
+        score += 6;
       }
 
-      if (articleTerms.some(term => text.includes(term))) {
+      if (isBurgerSearch && /\b(gluten-free|gluten free|celiac|coeliac)\b/.test(text)) {
         score -= 4;
       }
 
-      if (restaurantQuery && /\b(list of restaurants|restaurant guide|where to eat)\b/.test(text)) {
+      if (articleTerms.some(term => text.includes(term))) {
+        score -= 3;
+      }
+
+      if (isRestaurantSearch && /\b(restaurant guide|where to eat)\b/.test(text)) {
         score += 1;
       }
 
       return { item, score, index };
     })
     .sort((a, b) => b.score - a.score || a.index - b.index)
-    .slice(0, 5)
+    .slice(0, 10)
     .map(entry => entry.item);
 }
 
-async function askOpenAI(instructions, input, maxTokens = 180) {
+async function askOpenAI(instructions, input, maxTokens = 150) {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY is not configured.");
   }
@@ -300,15 +331,14 @@ async function createTrollAnswer(query) {
   const instructions = `
 You are TROOLLgel, a parody search engine.
 
-Answer with one short, absurd, funny, deadpan sentence.
-Do not give a normal factual explanation.
-Do not include links, lists, markdown or search results.
-Keep it witty and concise.
+Give one short, funny, absurd, deadpan sentence.
+Do not provide a normal factual explanation.
+Do not include links, lists, markdown, or sources.
+Keep it concise and original.
 
 Example:
 "What is gravity?"
-"Gravity is Earth's way of keeping everything from wandering off,
-including your dignity."
+"Gravity is Earth's clingy way of saying, 'No running off with the furniture.'"
 
 For medical, dangerous, criminal, self-harm or other high-risk topics,
 do not give harmful advice. Safety comes first.
@@ -337,30 +367,15 @@ app.post("/api/search", async (req, res) => {
   }
 
   /*
-   * Recommendation and list searches:
-   * show links only, never a troll comment.
+   * Recommendation searches always show links only.
+   * Never add a troll comment to a list or recommendation search.
    */
   if (isRecommendationSearch(query)) {
     let results = [];
 
-    const alternativeQueries = makeAlternativeQuery(query);
-
-    if (alternativeQueries.length > 0) {
-      results = await searchMultiple(alternativeQueries);
-      results = rankResults(results, alternativeQueries.join(" "));
-    }
-
-    /*
-     * If no alternative query applies or no alternatives were found,
-     * search the original query.
-     */
-    if (results.length === 0) {
-      try {
-        results = await tavilySearch(query);
-      } catch (error) {
-        console.error("ORIGINAL SEARCH FAILED:", error.message);
-      }
-    }
+    const queries = makeSearchQueries(query);
+    results = await searchMultiple(queries);
+    results = rankResults(results, query);
 
     return res.json({
       mode: "results",
@@ -371,10 +386,9 @@ app.post("/api/search", async (req, res) => {
   }
 
   /*
-   * Simple factual questions:
-   * return only the troll answer, with no links.
+   * Simple factual questions show only a troll answer.
    */
-  if (isSimpleQuestion(query)) {
+  if (isQuestion(query)) {
     try {
       const answer = await createTrollAnswer(query);
 
@@ -399,8 +413,7 @@ app.post("/api/search", async (req, res) => {
   }
 
   /*
-   * Other searches:
-   * return ordinary web results.
+   * Anything else is treated as a normal web search.
    */
   try {
     const results = await tavilySearch(query);
