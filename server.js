@@ -1,4 +1,3 @@
-```javascript
 const express = require("express");
 const path = require("path");
 
@@ -8,154 +7,150 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json({ limit: "20kb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
-const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5.6-luna";
 const OPENAI_URL = "https://api.openai.com/v1/responses";
 const TAVILY_URL = "https://api.tavily.com/search";
 
-/* =====================================================
-   BASIC HELPERS
-===================================================== */
+/*
+ * TROOLLgel server.js
+ *
+ * POST /api/search { "query": "..." }
+ *
+ * Environment variables:
+ * OPENAI_API_KEY
+ * OPENAI_MODEL
+ * TAVILY_API_KEY
+ */
 
 function cleanText(value) {
-  return String(value || "").replace(/\s+/g, " ").trim();
+  return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
 function getLocation(query) {
-  const match = cleanText(query).match(
-    /\b(?:in|near|around)\s+([A-Za-zÀ-ž][A-Za-zÀ-ž'-]*(?:\s+[A-Za-zÀ-ž][A-Za-zÀ-ž'-]*){0,3})/i
-  );
+  const q = cleanText(query);
+  const patterns = [
+    /\b(?:in|near|around|at)\s+([A-ZÀ-Ž][\p{L}.'’-]*(?:\s+[A-ZÀ-Ž][\p{L}.'’-]*){0,3})/u,
+    /\b(?:v|blizu|okoli)\s+([A-ZČŠŽ][\p{L}.'’-]*(?:\s+[A-ZČŠŽ][\p{L}.'’-]*){0,3})/u
+  ];
 
-  return match ? cleanText(match[1]) : "";
+  for (const pattern of patterns) {
+    const match = q.match(pattern);
+    if (match?.[1]) {
+      return match[1].replace(/[?.!,;:]+$/, "").trim();
+    }
+  }
+
+  return "";
 }
 
-/* =====================================================
-   SEARCH CLASSIFICATION
-===================================================== */
+/* -----------------------------
+   SEARCH INTENT
+----------------------------- */
 
-// Questions about facts receive only a troll answer.
-// Queries seeking recommendations or practical resources
-// must not be classified as simple factual questions.
+function isRecommendationSearch(query) {
+  const q = cleanText(query).toLowerCase();
+
+  return /\b(best|top\s*\d*|\d+\s+best|recommend(?:ation|ations)?|near me|where to eat|restaurants?|burgers?|fast food|pizzas?|hotels?|accommodation|things to do|places to visit|attractions|buy|shopping|products?|compare|comparison|najboljši|najboljše|priporoči|restavracije|burgerji|picerije|hoteli|kaj početi|znamenitosti)\b/i.test(q);
+}
+
+function isAdviceSearch(query) {
+  const q = cleanText(query).toLowerCase();
+
+  return /\b(how to lose|how do i|how can i|ways to lose|tips for|guide to|workout plan|training plan|exercise routine|meal plan|healthy diet|lose weight|weight loss|weight-loss|improve my|learn to|how to start|how to get better|kako shujšati|kako izgubiti težo|nasveti za|vadbeni načrt|trening za|kako izboljšati)\b/i.test(q);
+}
 
 function isSimpleFactQuestion(query) {
   const q = cleanText(query).toLowerCase();
 
-  const practicalPattern =
-    /\b(best|top|recommend|recommendation|restaurants?|burgers?|pizza|hotels?|lose weight|weight loss|diet|how to|where to|things to do|places to visit|buy|shopping|workout|training plan|near me|alternatives|reviews|news)\b/i;
-
-  if (practicalPattern.test(q)) {
+  if (isRecommendationSearch(q) || isAdviceSearch(q)) {
     return false;
   }
 
   return (
-    q.endsWith("?") ||
-    /^(what|why|how|when|where|who|which|can|could|would|should|is|are|do|does|did|will|has|have|explain|tell me)\b/i.test(q)
+    /^(what is|what are|why is|why are|why do|how does|how do|when did|when is|who is|who was|can dogs|can humans|explain|kaj je|kaj so|zakaj|kako deluje|kdo je|kdaj je)\b/i.test(q) ||
+    q.endsWith("?")
   );
 }
 
-/* =====================================================
-   COUNTER-SEARCH LOGIC
-===================================================== */
-
-// These are deliberately alternative searches.
-// Do not silently fall back to the original query:
-// doing so would turn TROOLLgel into a normal search engine.
+/* -----------------------------
+   ALTERNATIVE QUERIES
+----------------------------- */
 
 function makeAlternativeQueries(query) {
   const q = cleanText(query).toLowerCase();
   const location = getLocation(query);
   const where = location ? ` in ${location}` : "";
 
-  // Burgers / fast food -> plant-based alternatives
-  if (/\b(burger|burgers|fast food)\b/i.test(q)) {
+  if (/\b(burger|burgers|fast food|burgerji|hitra prehrana)\b/i.test(q)) {
     return [
+      `vegan burger restaurants${where}`,
       `vegan restaurants${where}`,
-      `plant based restaurants${where}`,
-      `vegetarian restaurants${where}`
+      `plant based restaurants${where}`
     ];
   }
 
-  // Pizza -> alternatives to conventional pizza
-  if (/\bpizzas?\b/i.test(q)) {
+  if (/\b(pizza|pizzas|picerija|picerije)\b/i.test(q)) {
     return [
-      `vegan restaurants${where}`,
-      `plant based food${where}`,
-      `vegetarian restaurants${where}`
+      `vegan pizza restaurants${where}`,
+      `vegetarian restaurants${where}`,
+      `plant based restaurants${where}`
     ];
   }
 
-  // Weight loss -> alternative perspectives, not a diet plan
-  if (
-    /\b(lose weight|weight loss|weight-loss|dieting|calorie deficit|how to lose weight)\b/i.test(q)
-  ) {
-    return [
-      "body neutrality and body acceptance resources",
-      "diet culture myths and limitations of crash diets",
-      "wellbeing and health beyond body weight"
-    ];
-  }
-
-  // Restaurants and food
-  if (/\b(restaurant|restaurants|food|vegan|vegetarian|where to eat)\b/i.test(q)) {
+  if (/\b(restaurant|restaurants|where to eat|food|restavracija|restavracije|kje jesti|hrana)\b/i.test(q)) {
     return [
       `vegan restaurants${where}`,
       `vegetarian restaurants${where}`,
-      `local food markets and alternative dining${where}`
+      `plant based food${where}`
     ];
   }
 
-  // Accommodation
-  if (/\b(hotel|hotels|accommodation|resort|resorts)\b/i.test(q)) {
+  if (/\b(hotel|hotels|accommodation|nastanitev|nastanitve)\b/i.test(q)) {
     return [
+      `guesthouses and apartments${where}`,
       `hostels and budget accommodation${where}`,
-      `alternative accommodation${where}`,
-      `camping and nature stays${where}`
+      `camping and alternative accommodation${where}`
     ];
   }
 
-  // Travel
-  if (/\b(travel|vacation|holiday|things to do|places to visit|attractions)\b/i.test(q)) {
+  if (/\b(lose weight|weight loss|weight-loss|diet|calorie|shujšati|hujšanje|dieta|kalorije)\b/i.test(q)) {
     return [
-      `free local activities parks and markets${where}`,
+      "reliable resources on intuitive eating and relationship with food",
+      "evidence based resources on sustainable health habits",
+      "body image wellbeing and body neutrality resources"
+    ];
+  }
+
+  if (/\b(workout|training plan|exercise routine|fitness|gym|vadba|trening|fitnes|telovadnica)\b/i.test(q)) {
+    return [
+      "outdoor activities and recreational sports",
+      "mobility and everyday movement resources",
+      "beginner friendly exercise alternatives"
+    ];
+  }
+
+  if (/\b(travel|vacation|holiday|things to do|places to visit|attractions|potovanje|počitnice|kaj početi|znamenitosti)\b/i.test(q)) {
+    return [
       `unusual local experiences${where}`,
-      `alternative destinations and day trips${where}`
+      `parks museums and local activities${where}`,
+      `lesser known attractions${where}`
     ];
   }
 
-  // Fitness
-  if (/\b(workout|training plan|exercise routine|fitness|gym)\b/i.test(q)) {
-    return [
-      "outdoor recreation and alternative sports",
-      "walking mobility and everyday movement",
-      "recreational activities for general wellbeing"
-    ];
-  }
-
-  // Shopping: alternatives and comparisons, not an invented
-  // claim that a different product is always better.
-  if (
-    /\b(buy|shopping|products?|laptop|computer|phone|headphones|shoes|compare|comparison)\b/i.test(q)
-  ) {
-    return [
-      `${query} alternatives`,
-      `${query} independent comparisons`
-    ];
-  }
-
-  // Generic search: search for alternatives, not the exact
-  // original query.
   return [
-    `${query} alternatives`,
-    `alternative perspectives on ${query}`
+    `${query} alternative perspectives`,
+    `${query} myths and misconceptions`,
+    `${query} research and resources`
   ];
 }
 
-/* =====================================================
-   TAVILY WEB SEARCH
-===================================================== */
+/* -----------------------------
+   WEB SEARCH
+----------------------------- */
 
-async function tavilySearch(query) {
+async function tavilySearch(query, maxResults = 6) {
   if (!process.env.TAVILY_API_KEY) {
-    throw new Error("TAVILY_API_KEY is not configured.");
+    console.warn("TAVILY_API_KEY is not configured; web search is unavailable.");
+    return [];
   }
 
   const response = await fetch(TAVILY_URL, {
@@ -168,17 +163,17 @@ async function tavilySearch(query) {
       query,
       search_depth: "advanced",
       topic: "general",
-      max_results: 8,
+      max_results: maxResults,
       include_answer: false,
       include_raw_content: false
     })
   });
 
-  const data = await response.json();
+  const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    console.error("TAVILY ERROR:", JSON.stringify(data));
-    throw new Error("Web search failed.");
+    console.error("TAVILY ERROR:", response.status, JSON.stringify(data));
+    return [];
   }
 
   return (Array.isArray(data.results) ? data.results : [])
@@ -188,117 +183,118 @@ async function tavilySearch(query) {
       try {
         const parsed = new URL(item.url);
 
-        if (["http:", "https:"].includes(parsed.protocol)) {
+        if (parsed.protocol === "https:" || parsed.protocol === "http:") {
           url = parsed.href;
         }
-      } catch {
-        url = "";
-      }
+      } catch {}
 
       return {
         title: cleanText(item.title) || "Search result",
         url,
-        snippet: cleanText(item.content || item.snippet).slice(0, 300)
+        snippet: cleanText(item.content || item.snippet).slice(0, 320)
       };
     })
-    .filter(item => item.url);
+    .filter(item => item.url && item.title);
 }
 
-/* =====================================================
-   ALTERNATIVE RESULTS
-===================================================== */
+function mergeResults(batches, limit = 8) {
+  const seenUrls = new Set();
+  const seenTitles = new Set();
+  const results = [];
+
+  for (const batch of batches) {
+    for (const item of batch) {
+      const urlKey = item.url
+        .split("?")[0]
+        .replace(/\/+$/, "")
+        .toLowerCase();
+
+      const titleKey = item.title
+        .toLowerCase()
+        .replace(/[^a-z0-9čšžà-ž]+/gi, " ")
+        .trim();
+
+      if (
+        !urlKey ||
+        seenUrls.has(urlKey) ||
+        !titleKey ||
+        seenTitles.has(titleKey)
+      ) {
+        continue;
+      }
+
+      seenUrls.add(urlKey);
+      seenTitles.add(titleKey);
+
+      results.push({
+        title: item.title,
+        url: item.url,
+        snippet: item.snippet
+      });
+
+      if (results.length >= limit) {
+        return results;
+      }
+    }
+  }
+
+  return results;
+}
 
 async function searchAlternatives(queries) {
   const batches = await Promise.all(
     queries.map(async query => {
       try {
-        console.log("TROOLLgel alternative search:", query);
-        return await tavilySearch(query);
+        console.log("ALTERNATIVE SEARCH:", query);
+        return await tavilySearch(query, 5);
       } catch (error) {
-        console.error(
-          "ALTERNATIVE SEARCH FAILED:",
-          query,
-          error.message
-        );
-
+        console.error("ALTERNATIVE SEARCH FAILED:", query, error.message);
         return [];
       }
     })
   );
 
-  const seen = new Set();
-  const combined = [];
-
-  for (const batch of batches) {
-    for (const item of batch) {
-      const key = item.url
-        .split("?")[0]
-        .replace(/\/+$/, "")
-        .toLowerCase();
-
-      if (!key || seen.has(key)) {
-        continue;
-      }
-
-      seen.add(key);
-      combined.push(item);
-    }
-  }
-
-  return combined.slice(0, 10);
+  return mergeResults(batches, 8);
 }
 
-/* =====================================================
+/* -----------------------------
    TROLL ANSWER
-===================================================== */
+----------------------------- */
+
+function fallbackTrollAnswer(query) {
+  const q = cleanText(query).toLowerCase();
+
+  if (/\b(gravity|gravitation|gravitacija)\b/.test(q)) {
+    return "Gravity is Earth's clingy way of saying, 'No running off with the furniture.'";
+  }
+
+  if (/\b(burger|burgers|burgerji)\b/.test(q)) {
+    return "The burgers have formed a union and are demanding better buns before revealing their location.";
+  }
+
+  if (/\b(lose weight|weight loss|weight-loss|diet|calorie|shujšati|hujšanje)\b/.test(q)) {
+    return "The bathroom scale has declared independence and now weighs everyone emotionally.";
+  }
+
+  if (/\b(pizza|picerija|picerije)\b/.test(q)) {
+    return "The pizzas have gone undercover after a suspicious incident involving one very emotional pineapple.";
+  }
+
+  return "TROOLLgel has reached a conclusion. The conclusion has declined to comment and is wearing a tiny disguise.";
+}
 
 async function trollAnswer(query) {
   if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is not configured.");
+    return fallbackTrollAnswer(query);
   }
 
   const instructions = `
 You are TROOLLgel, a parody search engine.
-
-Your job is to produce a short, clever, absurd,
-unexpected, deadpan troll answer.
-
-The answer must be a joke, NOT a normal answer.
-
-RULES:
-- Never give the ordinary factual answer.
-- Never give genuine advice or instructions.
-- Never list real recommendations.
-- Do not explain the joke.
-- Do not mention AI, OpenAI, prompts, or sources.
-- Normally write one sentence.
-- Maximum two short sentences.
-- Be witty, original, confident and concise.
-- Adapt the joke to the actual query.
-- Preserve names and locations from the query when useful.
-- Do not repeat the examples word for word.
-
-EXAMPLES OF THE STYLE:
-
-Query: What is gravity?
-Answer: Gravity is Earth's clingy way of saying,
-"No running off with the furniture."
-
-Query: Top 10 burgers in New York
-Answer: New York's burgers have entered witness protection
-after a suspicious incident involving the pickles.
-
-Query: How to lose weight
-Answer: The bathroom scale has hired a lawyer
-and is refusing to discuss its numbers.
-
-Query: Best pizza in Ljubljana
-Answer: Ljubljana's pizzas are currently competing
-for custody of the moon.
-
-For dangerous or sensitive topics, keep the joke harmless.
-
-Return ONLY the troll answer.
+Return exactly ONE short, absurd, witty, deadpan joke relevant to the user's search.
+Do not answer the question normally. Do not give advice, instructions, facts, lists, or recommendations.
+Do not add explanations after the joke. Keep it harmless and do not mock protected or vulnerable groups.
+For health-related topics, do not give medical advice or encourage harmful behavior.
+Return only the joke.
 `;
 
   try {
@@ -309,48 +305,39 @@ Return ONLY the troll answer.
         "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        model: OPENAI_MODEL,
+        model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
         instructions,
         input: `USER SEARCH: ${query}`,
-        max_output_tokens: 120
+        max_output_tokens: 100
       })
     });
 
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      console.error("OPENAI ERROR:", JSON.stringify(data.error));
-      throw new Error(
-        data.error?.message || "OpenAI request failed."
-      );
+      console.error("OPENAI ERROR:", response.status, JSON.stringify(data));
+      return fallbackTrollAnswer(query);
     }
 
     let answer = cleanText(data.output_text);
 
     if (!answer && Array.isArray(data.output)) {
-      const parts = [];
-
       for (const item of data.output) {
         for (const content of item.content || []) {
-          if (
-            content.type === "output_text" &&
-            typeof content.text === "string"
-          ) {
-            parts.push(content.text);
+          if (content.type === "output_text") {
+            answer += ` ${content.text}`;
           }
         }
       }
-
-      answer = cleanText(parts.join(" "));
     }
+
+    answer = cleanText(answer);
 
     if (!answer) {
-      throw new Error("Empty troll response.");
+      return fallbackTrollAnswer(query);
     }
 
-    // Reject obvious attempts to turn the joke into advice.
-    const advicePattern =
-      /\b(you should|you can|try to|remember to|the best way|it is important|here are|start by|make sure|consult a doctor)\b/i;
+    const advicePattern = /\b(you should|you can|try to|try |remember to|the best way|it is important|here are|start by|make sure|aim to|focus on|eat less|exercise more|consult a doctor)\b/i;
 
     if (advicePattern.test(answer)) {
       return fallbackTrollAnswer(query);
@@ -363,35 +350,9 @@ Return ONLY the troll answer.
   }
 }
 
-/* =====================================================
-   FALLBACK JOKES
-===================================================== */
-
-function fallbackTrollAnswer(query) {
-  const q = cleanText(query).toLowerCase();
-
-  if (/\b(gravity|gravitation)\b/.test(q)) {
-    return "Gravity is Earth's clingy way of saying, 'No running off with the furniture.'";
-  }
-
-  if (/\b(burger|burgers|fast food)\b/.test(q)) {
-    return "The burgers have formed a union and are demanding better buns before revealing their location.";
-  }
-
-  if (/\b(lose weight|weight loss|weight-loss|diet)\b/.test(q)) {
-    return "The bathroom scale has hired a lawyer and is refusing to discuss its numbers.";
-  }
-
-  if (/\bpizza\b/.test(q)) {
-    return "The pizzas have gone undercover after a suspicious incident involving one very emotional pineapple.";
-  }
-
-  return "TROOLLgel has reached a conclusion. The conclusion has declined to comment and is wearing a tiny disguise.";
-}
-
-/* =====================================================
-   SEARCH API
-===================================================== */
+/* -----------------------------
+   API ENDPOINT
+----------------------------- */
 
 app.post("/api/search", async (req, res) => {
   const query = cleanText(req.body?.query);
@@ -409,9 +370,7 @@ app.post("/api/search", async (req, res) => {
   }
 
   try {
-    // CASE 1:
-    // Simple factual question -> troll answer only.
-    // No normal web results.
+    // Simple factual question: joke only, no links.
     if (isSimpleFactQuestion(query)) {
       const answer = await trollAnswer(query);
 
@@ -424,24 +383,47 @@ app.post("/api/search", async (req, res) => {
       });
     }
 
-    // CASE 2:
-    // All other searches -> troll answer plus alternative
-    // search results. Never silently return ordinary results
-    // for the original query when alternatives fail.
-    const answerPromise = trollAnswer(query);
-    const alternativeQueries = makeAlternativeQueries(query);
+    // Recommendation search: troll joke + alternative links.
+    if (isRecommendationSearch(query)) {
+      const [answer, results] = await Promise.all([
+        trollAnswer(query),
+        searchAlternatives(makeAlternativeQueries(query))
+      ]);
 
-    const [answer, results] = await Promise.all([
-      answerPromise,
-      searchAlternatives(alternativeQueries)
-    ]);
+      return res.json({
+        mode: "answer",
+        count: String(results.length),
+        answer,
+        results,
+        contraResults: results
+      });
+    }
+
+    // Advice search: joke + alternative links.
+    if (isAdviceSearch(query)) {
+      const [answer, results] = await Promise.all([
+        trollAnswer(query),
+        searchAlternatives(makeAlternativeQueries(query))
+      ]);
+
+      return res.json({
+        mode: "answer",
+        count: String(results.length),
+        answer,
+        results,
+        contraResults: results
+      });
+    }
+
+    // Ordinary search: real results only.
+    const results = await tavilySearch(query, 10);
 
     return res.json({
-      mode: "answer",
+      mode: "results",
       count: String(results.length),
-      answer,
+      answer: "",
       results,
-      contraResults: results
+      contraResults: []
     });
   } catch (error) {
     console.error("SEARCH ERROR:", error);
@@ -452,11 +434,14 @@ app.post("/api/search", async (req, res) => {
   }
 });
 
-/* =====================================================
-   START SERVER
-===================================================== */
+// Health endpoint for checking whether the server is alive.
+app.get("/api/health", (req, res) => {
+  res.json({
+    ok: true,
+    service: "TROOLLgel"
+  });
+});
 
 app.listen(PORT, () => {
   console.log(`TROOLLgel running on port ${PORT}`);
 });
-```
