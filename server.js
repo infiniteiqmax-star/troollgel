@@ -1,4 +1,3 @@
-```javascript
 const express = require("express");
 const path = require("path");
 
@@ -12,113 +11,72 @@ function fallbackAnswer(query) {
   const q = query.toLowerCase();
 
   if (/weight|diet|hujšan|shujš|dieta/.test(q)) {
-    return "The bathroom scale has filed a formal complaint. It says you keep bringing drama to work.";
+    return "Your bathroom scale has started a podcast. Its first episode is called 'We Need to Talk'.";
   }
 
   if (/hotel|paris|nastanitev/.test(q)) {
-    return "The best hotel in Paris is fully booked. Apparently, even the pigeons made reservations.";
+    return "Paris has 2,000 hotels and somehow you've managed to ask the one question that made them all check out.";
   }
 
   if (/burger|hamburger/.test(q)) {
-    return "We investigated the world's best burgers. The leading suspect was last seen covered in cheese.";
+    return "The burgers were ranked by a panel of hungry pigeons. The winner was disqualified for eating the evidence.";
   }
 
   if (/gravity|gravitacija/.test(q)) {
-    return "Gravity is Earth's way of keeping its friends close and its astronauts on a very expensive leash.";
+    return "Gravity is Earth's subscription service. You can jump all you want, but there's no unsubscribe button.";
   }
 
-  return "Our experts studied your question for 14 hours. They now have 14 new questions and a suspiciously small hat.";
+  if (/cat|cats|mačka|mačke/.test(q)) {
+    return "Cats knock things off tables to test whether gravity still works. So far, the results are devastating.";
+  }
+
+  return "Scientists have examined your question. Three quit, one moved to Iceland, and the intern is now legally a mushroom.";
 }
 
 async function getTrollAnswer(query) {
-  if (!process.env.OPENAI_API_KEY) {
+  const apiKey = process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
     return fallbackAnswer(query);
   }
 
   const instructions = `
-You are the comedy engine behind TROOLLgel, a deliberately absurd troll search engine.
+You are TROOLLgel, a deliberately absurd troll search engine.
 
-YOUR MISSION:
-Turn the user's search into a genuinely funny, unexpected punchline.
-You are NOT a helpful assistant. You are NOT a normal search engine.
-You are the friend who gives the most ridiculous possible response
-with complete confidence.
+Your ONLY job is to make the user laugh with a clever, unexpected,
+highly specific joke about their exact search query.
 
-HUMOUR RULES:
+RULES:
+- Never answer the question seriously.
+- Never give advice, instructions, or recommendations.
+- Never provide links, sources, search results, or alternatives.
+- Never list options.
+- Return one short joke, ideally 10 to 30 words.
+- Make the joke directly relevant to the exact query.
+- Use wit, irony, absurd logic, wordplay, and unexpected punchlines.
+- Be creative. Avoid generic jokes and predictable AI phrasing.
+- Vary your joke structure. Do not repeatedly use fake investigations,
+  committees, complaints, or the phrase "Our experts".
+- Do not repeat the examples below word for word.
+- Keep humour harmless and do not shame the user.
 
-1. Be SPECIFIC to the exact search.
-   The joke must clearly relate to what the user typed.
-   If they search for hotels in Paris, make a Paris/hotel joke.
-   If they ask about gravity, make a gravity joke.
-   Never give an interchangeable joke that could fit any query.
+Examples of style:
 
-2. Use clever absurdity, unexpected twists, deadpan confidence,
-   ridiculous imaginary situations, mock investigations,
-   conspiracy theories about everyday objects, or witty wordplay.
+Query: How to lose weight
+Response: "Have you tried stepping on the scale while holding a large cake? At least then the numbers have an explanation."
 
-3. Prefer one excellent punchline over several mediocre sentences.
-   Usually use one or two sentences, ideally under 35 words.
+Query: Best hotels in Paris
+Response: "The fanciest hotel in Paris has a pillow menu. The budget option lets you choose which side of your suitcase to sleep on."
 
-4. Treat the search as if it were a completely serious investigation
-   into something utterly ridiculous.
+Query: Top 10 burgers in New York
+Response: "We ranked ten burgers. Number one won by bribing the judges with cheese."
 
-5. Be bold and unpredictable. Avoid obvious, childish,
-   overused jokes and generic AI humour.
+Query: What is gravity?
+Response: "Earth's premium subscription service. You can jump, but cancellation is not available."
 
-6. VARY THE COMEDY STYLE.
-   Do not always start with "The..." or "Our experts..."
-   Do not always use investigations, committees, or complaints.
-   Alternate between witty observations, absurd scenarios,
-   fake statistics, ridiculous logic, wordplay, and unexpected twists.
+These examples show the desired style. Invent a fresh response for every query.
 
-7. Never repeat the user's query as an introduction.
-   Never explain the joke.
-   Never apologise.
-   Never say you cannot help.
-
-ABSOLUTE CONTENT RULES:
-
-- Do not answer the question seriously.
-- Do not give instructions, practical advice, or recommendations.
-- Do not provide links, sources, alternatives, or search results.
-- Do not provide a list.
-- Return ONLY the troll response, with no heading or quotation marks.
-- For health, weight, money, or personal topics, keep the humour
-  harmless. Do not shame the user or encourage dangerous behaviour.
-
-EXAMPLES OF THE DESIRED QUALITY:
-
-Search: "How to lose weight"
-Good: "Have you tried turning yourself sideways when stepping on the scale?"
-Bad: "Weight loss is a journey. Stay positive!"
-
-Search: "Best hotels in Paris"
-Good: "The best hotel in Paris is the one where the receptionist
-forgets to ask why you brought your own shower curtain."
-Bad: "The hotels have gone into witness protection."
-
-Search: "Top 10 burgers in New York"
-Good: "We ranked 10 burgers. Number one has refused to participate
-in the investigation."
-Bad: "The burgers have formed a secret society."
-
-Search: "What is gravity?"
-Good: "Earth's premium subscription service. You can jump,
-but cancellation is not available."
-Bad: "Gravity is Earth's clingy ex."
-
-These examples demonstrate the style, NOT fixed answers to reuse.
-Invent a fresh punchline for each query.
-
-Before responding, silently check:
-- Is the joke specifically about the user's search?
-- Is there a genuine twist or clever observation?
-- Does it sound different from a generic chatbot joke?
-- Have I avoided useful advice and links?
-
-If not, think of a better joke.
-
-Return only the final joke.
+Return only the joke. No quotation marks, no explanation, no heading.
 `;
 
   try {
@@ -128,14 +86,13 @@ Return only the final joke.
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+          "Authorization": "Bearer " + apiKey
         },
         body: JSON.stringify({
           model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
-          instructions,
-          input: `Search query: ${query}`,
-          max_output_tokens: 100,
-          temperature: 1
+          instructions: instructions,
+          input: "User search query: " + query,
+          max_output_tokens: 100
         })
       }
     );
@@ -150,24 +107,34 @@ Return only the final joke.
     let answer = data.output_text || "";
 
     if (!answer && Array.isArray(data.output)) {
-      answer = data.output
-        .flatMap(item => item.content || [])
-        .filter(item => item.type === "output_text")
-        .map(item => item.text)
-        .join(" ");
+      for (const item of data.output) {
+        if (Array.isArray(item.content)) {
+          for (const content of item.content) {
+            if (content.type === "output_text" && content.text) {
+              answer += content.text + " ";
+            }
+          }
+        }
+      }
     }
 
     answer = answer.trim();
 
-    return answer || fallbackAnswer(query);
+    if (!answer) {
+      return fallbackAnswer(query);
+    }
+
+    return answer;
   } catch (error) {
-    console.error("Troll generation error:", error.message);
+    console.error("OpenAI request failed:", error.message);
     return fallbackAnswer(query);
   }
 }
 
 app.post("/api/search", async (req, res) => {
-  const query = String(req.body?.query || "").trim();
+  const query = String(
+    req.body && req.body.query ? req.body.query : ""
+  ).trim();
 
   if (!query) {
     return res.status(400).json({
@@ -187,12 +154,12 @@ app.post("/api/search", async (req, res) => {
     return res.json({
       mode: "answer",
       count: "0",
-      answer,
+      answer: answer,
       results: [],
       contraResults: []
     });
   } catch (error) {
-    console.error("Search endpoint error:", error);
+    console.error("Search route error:", error.message);
 
     return res.status(500).json({
       error: "TROOLLgel encountered an unexpected error."
@@ -201,13 +168,12 @@ app.post("/api/search", async (req, res) => {
 });
 
 app.get("/api/health", (req, res) => {
-  res.json({
+  return res.json({
     ok: true,
     service: "TROOLLgel"
   });
 });
 
 app.listen(PORT, () => {
-  console.log(`TROOLLgel running on port ${PORT}`);
+  console.log("TROOLLgel running on port " + PORT);
 });
-```
