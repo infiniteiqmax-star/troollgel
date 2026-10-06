@@ -1,92 +1,41 @@
-```javascript
 const express = require("express");
 const path = require("path");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json({ limit: "20kb" }));
+app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-const OPENAI_URL = "https://api.openai.com/v1/responses";
-
-/*
- * TROOLLgel
- *
- * Pravila:
- * - Uporabnik išče ali sprašuje.
- * - TROOLLgel vrne kratek, absurden troll odgovor.
- * - Ne prikazuje rezultatov iskanja.
- * - Ne ponuja alternativnih povezav.
- * - Ne odgovarja resno na uporabnikovo vprašanje.
- *
- * Environment variable:
- * OPENAI_API_KEY
- * OPENAI_MODEL (optional)
- */
-
-function cleanText(value) {
-  return String(value ?? "").replace(/\s+/g, " ").trim();
-}
-
-function fallbackTrollAnswer(query) {
+function fallbackAnswer(query) {
   const q = query.toLowerCase();
 
-  if (/\b(weight|lose weight|diet|calorie|hujšanje|shujšati|dieta)\b/i.test(q)) {
-    return "The bathroom scale has requested legal representation and refuses to discuss the numbers.";
+  if (/weight|diet|hujšan|shujš|dieta/.test(q)) {
+    return "The bathroom scale has hired a lawyer and refuses to answer questions.";
   }
 
-  if (/\b(hotel|hotels|paris|hotelov|nastanitev)\b/i.test(q)) {
-    return "The hotels have held an emergency meeting and unanimously decided that you look suspicious.";
+  if (/hotel|paris|nastanitev/.test(q)) {
+    return "The hotels have gone into witness protection. Even the minibar knows too much.";
   }
 
-  if (/\b(burger|burgers|hamburger|burgerji)\b/i.test(q)) {
-    return "The burgers know what you did last summer. They are not ready to talk.";
+  if (/burger|hamburger/.test(q)) {
+    return "The burgers have formed a secret society. The password is extra pickles.";
   }
 
-  if (/\b(gravity|gravitation|gravitacija)\b/i.test(q)) {
-    return "Gravity is Earth's clingy ex. No matter how high you jump, it keeps pulling you back.";
+  if (/gravity|gravitacija/.test(q)) {
+    return "Gravity is just Earth refusing to let go. Very clingy behavior.";
   }
 
-  if (/\b(weather|vreme)\b/i.test(q)) {
-    return "The clouds have declined to comment. One of them looked pretty suspicious, though.";
-  }
-
-  if (/\b(president|politics|politician|politika|predsednik)\b/i.test(q)) {
-    return "The answer is currently under investigation by a committee investigating why there are so many committees.";
-  }
-
-  return "TROOLLgel has investigated your query thoroughly. Unfortunately, the investigator was a potato.";
+  return "TROOLLgel investigated your query. The lead investigator was a confused potato.";
 }
 
-async function generateTrollAnswer(query) {
+async function getTrollAnswer(query) {
   if (!process.env.OPENAI_API_KEY) {
-    return fallbackTrollAnswer(query);
+    return fallbackAnswer(query);
   }
 
-  const instructions = `
-You are TROOLLgel, an absurdist troll search engine.
-
-Your job is to respond to every user search with one short, witty,
-absurd, deadpan joke related to the subject.
-
-STRICT RULES:
-- Do NOT answer the user's question factually.
-- Do NOT provide useful advice, instructions, recommendations, or explanations.
-- Do NOT suggest alternatives or similar options.
-- Do NOT provide links, sources, websites, or search results.
-- Do NOT tell the user what they probably wanted instead.
-- Do NOT give a list.
-- Return only one short joke, preferably one or two sentences.
-- Make the joke relevant to the actual query.
-- Be creative and avoid generic repeated jokes.
-- Keep jokes harmless. Do not encourage dangerous behavior.
-- For medical, weight-loss, financial, or other sensitive topics,
-  make a harmless joke without giving real advice.
-`;
-
   try {
-    const response = await fetch(OPENAI_URL, {
+    const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -94,50 +43,45 @@ STRICT RULES:
       },
       body: JSON.stringify({
         model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
-        instructions,
-        input: `User search: ${query}`,
+        instructions: [
+          "You are TROOLLgel, an absurdist troll search engine.",
+          "Respond to the user's search with one short, witty, absurd joke.",
+          "Never answer the question seriously.",
+          "Never give advice, recommendations, alternatives, links, sources or search results.",
+          "Do not include headings or lists.",
+          "Return only the joke."
+        ].join(" "),
+        input: query,
         max_output_tokens: 100
       })
     });
 
-    const data = await response.json().catch(() => ({}));
+    const data = await response.json();
 
     if (!response.ok) {
-      console.error("OpenAI error:", response.status, data);
-      return fallbackTrollAnswer(query);
+      console.error("OpenAI API error:", response.status, data);
+      return fallbackAnswer(query);
     }
 
-    let answer = cleanText(data.output_text);
+    let answer = data.output_text || "";
 
     if (!answer && Array.isArray(data.output)) {
-      for (const item of data.output) {
-        for (const content of item.content || []) {
-          if (content.type === "output_text") {
-            answer += " " + content.text;
-          }
-        }
-      }
+      answer = data.output
+        .flatMap(item => item.content || [])
+        .filter(item => item.type === "output_text")
+        .map(item => item.text)
+        .join(" ");
     }
 
-    answer = cleanText(answer);
-
-    if (!answer) {
-      return fallbackTrollAnswer(query);
-    }
-
-    return answer;
+    return answer.trim() || fallbackAnswer(query);
   } catch (error) {
-    console.error("Troll generation failed:", error.message);
-    return fallbackTrollAnswer(query);
+    console.error("Troll generation error:", error);
+    return fallbackAnswer(query);
   }
 }
 
-/*
- * Main search endpoint.
- * Keep the response fields compatible with the existing frontend.
- */
 app.post("/api/search", async (req, res) => {
-  const query = cleanText(req.body?.query);
+  const query = String(req.body?.query || "").trim();
 
   if (!query) {
     return res.status(400).json({
@@ -152,7 +96,7 @@ app.post("/api/search", async (req, res) => {
   }
 
   try {
-    const answer = await generateTrollAnswer(query);
+    const answer = await getTrollAnswer(query);
 
     return res.json({
       mode: "answer",
@@ -165,7 +109,7 @@ app.post("/api/search", async (req, res) => {
     console.error("Search endpoint error:", error);
 
     return res.status(500).json({
-      error: "TROOLLgel has lost the plot. Try again."
+      error: "TROOLLgel encountered an unexpected error."
     });
   }
 });
@@ -180,4 +124,3 @@ app.get("/api/health", (req, res) => {
 app.listen(PORT, () => {
   console.log(`TROOLLgel running on port ${PORT}`);
 });
-```
