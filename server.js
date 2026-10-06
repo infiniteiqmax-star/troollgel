@@ -47,7 +47,7 @@ async function tavilySearch(query) {
       query,
       search_depth: "advanced",
       topic: "general",
-      max_results: 8,
+      max_results: 10,
       include_answer: false,
       include_raw_content: false
     })
@@ -110,9 +110,6 @@ async function askOpenAI(instructions, input, maxTokens = 200) {
   return text;
 }
 
-/*
- * Decide which searches should get a joke and alternative links.
- */
 function shouldShowTrollAnswer(query) {
   const q = cleanText(query).toLowerCase();
 
@@ -132,10 +129,6 @@ function shouldShowTrollAnswer(query) {
   return q.endsWith("?") || patterns.some(p => q.includes(p));
 }
 
-/*
- * Only practical searches receive alternative web results.
- * Simple factual questions get a joke without links.
- */
 function shouldShowCounterLinks(query) {
   const q = cleanText(query).toLowerCase();
 
@@ -153,8 +146,8 @@ function shouldShowCounterLinks(query) {
 }
 
 /*
- * Deterministic backup: alternative searches still work
- * when OpenAI cannot suggest a counter-query.
+ * Choose a genuinely useful alternative search.
+ * Restaurant searches should return places, not general articles.
  */
 function fallbackCounterSearchQuery(query) {
   const q = cleanText(query).toLowerCase();
@@ -164,27 +157,34 @@ function fallbackCounterSearchQuery(query) {
   );
 
   const location = locationMatch
-    ? ` in ${locationMatch[1]}`
+    ? locationMatch[1].trim()
     : "";
 
+  const where = location ? ` ${location}` : "";
+
   if (/\b(burgers?|fast food)\b/.test(q)) {
-    return `vegan and vegetarian restaurants${location}`;
+    return `vegan restaurants${where} restaurant menus opening hours`;
   }
 
   if (/\bpizzas?\b/.test(q)) {
-    return `vegetarian restaurants and healthy food${location}`;
+    return `vegan and vegetarian restaurants${where} menus`;
+  }
+
+  if (/\b(vegan|vegetarian)\b/.test(q) &&
+      /\b(restaurants?|food|eat)\b/.test(q)) {
+    return `vegan restaurants${where} restaurant menus`;
   }
 
   if (/\b(hotels?|accommodation|places to stay)\b/.test(q)) {
-    return `hostels and budget accommodation${location}`;
+    return `budget hostels and accommodation${where}`;
   }
 
   if (/\b(restaurants?|where to eat|food)\b/.test(q)) {
-    return `vegetarian restaurants${location}`;
+    return `vegetarian restaurants${where} menus`;
   }
 
   if (/\b(things to do|places to visit|travel|trip|vacation|holiday)\b/.test(q)) {
-    return `free attractions and unusual places to visit${location}`;
+    return `free attractions and unusual places to visit${where}`;
   }
 
   if (/\b(lose weight|weight loss|how do i|how can i|how to)\b/.test(q)) {
@@ -202,16 +202,27 @@ async function counterSearchQuery(query) {
   const instructions = `
 You create alternative search queries for TROOLLgel, a parody search engine.
 
-Return one short, useful, REAL web search query that deliberately redirects
-the user toward a different but related subject.
+Return ONE short, useful, real web search query that redirects the user
+toward a different but related subject.
 
 Examples:
-"10 best burgers in Ljubljana" -> "vegan restaurants in Ljubljana"
-"best fast food in Ljubljana" -> "vegetarian restaurants in Ljubljana"
-"best hotels in Paris" -> "cheap hostels in Paris"
+"10 best burgers in Ljubljana" ->
+"vegan restaurants in Ljubljana restaurant menus"
 
-For simple factual questions, return exactly NONE.
-Return only the query. No quotes or explanation.
+"best fast food in Ljubljana" ->
+"vegetarian restaurants in Ljubljana"
+
+"best hotels in Paris" ->
+"cheap hostels in Paris"
+
+IMPORTANT:
+- For restaurant searches, search for actual restaurants, menus,
+  restaurant websites, and useful restaurant directories.
+- Prefer pages about individual restaurants or lists of actual venues.
+- Avoid generic travel blogs, opinion articles, and unrelated food articles.
+- Preserve the location mentioned in the user's query.
+- For simple factual questions, return exactly NONE.
+- Return only the query, without quotes or explanation.
 `;
 
   const result = await askOpenAI(
@@ -230,17 +241,18 @@ Return only the query. No quotes or explanation.
 async function trollAnswer(query) {
   const instructions = `
 You are TROOLLgel, a parody search engine.
-
 Give ONE short, funny, absurd, confident answer.
 Do not answer the user's question normally.
 Use dry, deadpan humor and an unexpected twist.
 Usually one sentence; maximum two short sentences.
 No lists, markdown, explanations, sources, or real recommendations.
 
-Examples of style:
-"What is gravity?" -> "Gravity is the universe's clingy roommate."
-"Can dogs fly?" -> "Dogs skipped the wing upgrade and got zoomies instead."
-"10 best burgers in Ljubljana" -> "The city's burgers are currently negotiating bun-based diplomatic immunity."
+Example:
+"What is gravity?" ->
+"Gravity is the universe's clingy roommate."
+
+"Can dogs fly?" ->
+"Dogs skipped the wing upgrade and got zoomies instead."
 
 Do not repeat these examples unless appropriate.
 For medical, dangerous, criminal, self-harm or other high-risk topics,
@@ -252,6 +264,59 @@ do not give harmful advice. Safety comes first.
     `USER QUERY: ${query}`,
     180
   );
+}
+
+/*
+ * Remove obvious generic articles from local restaurant results.
+ * Keep restaurant websites and useful venue directories.
+ */
+function rankCounterResults(results, query) {
+  const q = cleanText(query).toLowerCase();
+  const isRestaurantSearch =
+    /\b(restaurant|restaurants|vegan|vegetarian|burger|burgers|pizza|food|where to eat)\b/.test(q);
+
+  if (!isRestaurantSearch) {
+    return results.slice(0, 5);
+  }
+
+  const articleTerms = [
+    "travel blog",
+    "personal blog",
+    "my favourite",
+    "my favorite",
+    "things to do",
+    "travel guide",
+    "food blog",
+    "blog for travelling"
+  ];
+
+  const scored = results.map((item, index) => {
+    const text = `${item.title} ${item.snippet} ${item.url}`.toLowerCase();
+    let score = 0;
+
+    if (/\b(restaurant|restavracija|vegan|veganika|kuche|menu|menus|cafe|bistro|food)\b/.test(text)) {
+      score += 3;
+    }
+
+    if (/\b(ljubljana|slovenia)\b/.test(text)) {
+      score += 2;
+    }
+
+    if (/\b(menu|opening hours|reservation|book a table|address|location)\b/.test(text)) {
+      score += 2;
+    }
+
+    if (articleTerms.some(term => text.includes(term))) {
+      score -= 4;
+    }
+
+    return { item, score, index };
+  });
+
+  return scored
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, 5)
+    .map(entry => entry.item);
 }
 
 app.post("/api/search", async (req, res) => {
@@ -288,7 +353,6 @@ app.post("/api/search", async (req, res) => {
     answer = await trollAnswer(query);
   } catch (error) {
     console.error("TROLL ANSWER FAILED:", error.message);
-
     answer = "The answer has gone missing. We suspect it was last seen arguing with a search engine.";
   }
 
@@ -312,17 +376,13 @@ app.post("/api/search", async (req, res) => {
     if (counterQuery) {
       try {
         contraResults = await tavilySearch(counterQuery);
+        contraResults = rankCounterResults(contraResults, counterQuery);
       } catch (error) {
         console.error("COUNTER SEARCH FAILED:", error.message);
       }
     }
   }
 
-  /*
-   * IMPORTANT:
-   * The current public/index.html reads data.contraResults.
-   * Return that exact field so the alternative links render.
-   */
   return res.json({
     mode: "answer",
     count: String(contraResults.length),
